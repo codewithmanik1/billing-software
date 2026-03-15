@@ -190,8 +190,8 @@ export const InvoiceForm: React.FC = () => {
                 className="w-12 h-12 rounded-lg object-contain bg-[#FBF0E4] p-1 shadow-sm"
               />
               <div>
-                <h2 className="text-[#1A1209] dark:text-[#F5F5F0] text-lg font-bold uppercase">More Jwellers</h2>
-                <p className="text-[#B8860B] text-[10px] font-bold uppercase tracking-wider">Billing Invoice</p>
+                <h2 className="text-[#1A1209] dark:text-[#F5F5F0] text-lg font-bold uppercase">More Jewellers</h2>
+                <p className="text-[#B8860B] text-[10px] font-bold uppercase tracking-wider">Karnataka</p>
               </div>
            </div>
 

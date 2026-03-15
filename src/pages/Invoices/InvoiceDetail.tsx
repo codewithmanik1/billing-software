@@ -207,12 +207,11 @@ export const InvoiceDetail: React.FC = () => {
                 className="w-20 h-20 rounded-2xl object-contain bg-[#FBF0E4] p-1 border border-[#B8860B]/30"
               />
               <div>
-                <h2 className="text-2xl font-bold text-[#1A1209]">More Jwellers</h2>
-                <p className="text-[#B8860B] text-[10px] font-bold uppercase tracking-[0.2em] mt-1">Exquisite Golden Heritage</p>
-                <div className="mt-3 space-y-1">
-                   <p className="text-[#6B5E4A] text-xs flex items-center gap-1.5 font-medium">📍 Main Market, Near Clock Tower, City 560001</p>
-                   <p className="text-[#6B5E4A] text-xs flex items-center gap-1.5 font-medium">📞 +91 99887 76655 &nbsp;|&nbsp; ✉️ accounts@morejwellers.com</p>
-                   <p className="text-[#B8860B] text-[11px] font-bold">GSTIN: 29MJWPS1234F1Z5</p>
+                <h2 className="text-2xl font-bold text-[#1A1209]">More Jewellers</h2>
+                <div className="mt-2 space-y-1">
+                   <p className="text-[#6B5E4A] text-xs font-medium">Main Road, Mehkar - 585416,</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium">Tq. Bhalki, Dist. Bidar, Karnataka</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium">Mob: 6281 218 824 &nbsp;|&nbsp; Email: morejewellers45@gmail.com</p>
                 </div>
               </div>
             </div>
@@ -334,7 +333,7 @@ export const InvoiceDetail: React.FC = () => {
                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#1A1209]">Digitally Authenticated By</p>
                 </div>
                 <div className="font-bold text-xl text-[#1A1209] mb-4 uppercase border-b-2 border-gray-200 pb-1">
-                  More Jwellers
+                  More Jewellers
                 </div>
                 <div className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Authorized Signature</div>
             </div>
