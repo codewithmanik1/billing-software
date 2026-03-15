@@ -111,7 +111,12 @@ export const InvoiceForm: React.FC = () => {
   useEffect(() => {
     watchItems.forEach((item, index) => {
       if (!item) return;
-      const amount = (Number(item.weightGrams || 0) * Number(item.ratePerGram || 0)) + Number(item.makingCharges || 0);
+      const weight = parseFloat(String(item.weightGrams)) || 0;
+      const rate = parseFloat(String(item.ratePerGram)) || 0;
+      const making = parseFloat(String(item.makingCharges)) || 0;
+      // Note: discount is global in this schema, so per-item disc is 0 unless added to schema
+      const amount = (weight * rate) + making;
+      
       if (item.amount !== amount) {
         setValue(`items.${index}.amount`, amount, { shouldValidate: true });
       }
@@ -191,7 +196,7 @@ export const InvoiceForm: React.FC = () => {
               />
               <div>
                 <h2 className="text-[#1A1209] dark:text-[#F5F5F0] text-lg font-bold uppercase">More Jewellers</h2>
-                <p className="text-[#B8860B] text-[10px] font-bold uppercase tracking-wider">Karnataka</p>
+                <p className="text-[#B8860B] text-[10px] font-bold uppercase tracking-wider">Main Road, Mehkar, Bidar, Karnataka</p>
               </div>
            </div>
 

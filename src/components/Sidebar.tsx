@@ -78,7 +78,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
             transition-opacity duration-150
             pointer-events-none z-50
           ">
-            More Jwellers
+            More Jewellers
           </span>
         </div>
       ) : (

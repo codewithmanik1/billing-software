@@ -209,9 +209,8 @@ export const InvoiceDetail: React.FC = () => {
               <div>
                 <h2 className="text-2xl font-bold text-[#1A1209]">More Jewellers</h2>
                 <div className="mt-2 space-y-1">
-                   <p className="text-[#6B5E4A] text-xs font-medium">Main Road, Mehkar - 585416,</p>
-                   <p className="text-[#6B5E4A] text-xs font-medium">Tq. Bhalki, Dist. Bidar, Karnataka</p>
-                   <p className="text-[#6B5E4A] text-xs font-medium">Mob: 6281 218 824 &nbsp;|&nbsp; Email: morejewellers45@gmail.com</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Main Road, Mehkar - 585416, Tq. Bhalki, Dist. Bidar, Karnataka</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Mob: 6281 218 824 &nbsp;|&nbsp; Email: morejewellers45@gmail.com</p>
                 </div>
               </div>
             </div>
@@ -264,13 +263,12 @@ export const InvoiceDetail: React.FC = () => {
                   <tr key={item.id || idx} className="text-gray-800 hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-5">
                        <div className="font-bold text-gray-900">{item.itemName}</div>
-                       <div className="text-[10px] text-gray-400 mt-0.5">HSN Code: 7113</div>
                     </td>
                     <td className="px-4 py-3 text-center font-medium">{item.purity}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">{item.weightGrams}g</td>
                     <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(Number(item.ratePerGram))}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(Number(item.makingCharges))}</td>
-                    <td className="px-6 py-3 text-right font-bold text-gray-900">{formatCurrency(Number(item.amount))}</td>
+                    <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(Number(item.makingCharges || 0))}</td>
+                    <td className="px-6 py-3 text-right font-bold text-gray-900">{formatCurrency(Number(item.amount || 0))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -321,7 +319,7 @@ export const InvoiceDetail: React.FC = () => {
                   <h3 className="text-[10px] font-bold text-[#B8860B] mb-2 uppercase tracking-widest">Terms of Service</h3>
                   <ul className="text-[9px] text-gray-500 list-disc pl-4 space-y-1 font-medium">
                      <li>Goods once sold will not be taken back without proper valuation.</li>
-                     <li>Standard purity certifications are guaranteed by More Jwellers.</li>
+                     <li>Standard purity certifications are guaranteed by More Jewellers.</li>
                      <li>Disputes are subject to City Jurisdiction only.</li>
                      <li>This is a computer generated invoice and requires no physical seal.</li>
                   </ul>
