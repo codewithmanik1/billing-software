@@ -18,7 +18,7 @@ const invoiceItemSchema = z.object({
   weightGrams: z.number().min(0.01, 'Weight > 0'),
   ratePerGram: z.number().min(1, 'Rate > 0'),
   makingCharges: z.number().min(0, 'Cannot be negative'),
-  discount: z.number().nonnegative().default(0),
+  discount: z.number().nonnegative(),
   lineTotal: z.number()
 });
 
@@ -66,7 +66,7 @@ export const InvoiceForm: React.FC = () => {
   const existingInvoice = existingInvoiceRes?.data;
   const customers = customersRes?.data?.customers || [];
 
-  const { register, handleSubmit, control, watch, setValue, formState: { isValid } } = useForm<InvoiceFormData>({
+  const { register, handleSubmit, control, watch, setValue, reset, formState: { errors, isValid } } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       customerId: '',
