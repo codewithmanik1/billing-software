@@ -91,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
           />
           <div className="flex flex-col leading-tight min-w-0 flex-1">
             <span className="text-[#FFD700] font-bold text-lg uppercase truncate">
-              More Jwellers
+              More Jewellers
             </span>
             <span className="text-[#9A9A8A] text-xs uppercase truncate">
               Billing System
