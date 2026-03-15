@@ -1,0 +1,107 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Smooth theme transitions */
+html {
+  transition: background-color 0.3s ease, color 0.2s ease;
+}
+
+@layer base {
+  body {
+    @apply bg-[#FAFAF7] text-[#1A1209] dark:bg-[#0A0A0A] dark:text-[#F5F5F0] font-sans antialiased;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif;
+  }
+
+  * {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-gold text-dark-900 font-medium px-4 py-2 rounded-md hover:bg-gold-light transition-colors focus:ring-2 focus:ring-gold disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-secondary {
+    @apply bg-[#F5F0E8] dark:bg-dark-700 text-[#1A1209] dark:text-gray-200 font-medium px-4 py-2 rounded-md hover:bg-[#E8E0D0] dark:hover:bg-dark-600 transition-colors border border-[#E8E0D0] dark:border-dark-700;
+  }
+  
+  .input-field {
+    @apply w-full bg-white dark:bg-[#1A1A1A] border border-[#E8E0D0] dark:border-[#2E2E2E] rounded-md px-3 py-2 text-[#1A1209] dark:text-[#F5F5F0] placeholder-[#6B5E4A] dark:placeholder-[#9A9A8A] focus:outline-none focus:ring-2 focus:ring-[#B8860B] focus:border-transparent transition-all;
+  }
+  
+  .card {
+    @apply bg-white dark:bg-[#1A1A1A] border border-[#E8E0D0] dark:border-[#2E2E2E] rounded-xl overflow-hidden shadow-[0_2px_12px_rgba(184,134,11,0.08)] dark:shadow-xl;
+  }
+  
+  /* Table rows — the core hover fix */
+  .table-row {
+    @apply bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 cursor-pointer;
+  }
+  
+  .table-row:nth-child(even) {
+    @apply bg-[#FAF6EE] dark:bg-[#111111];
+  }
+}
+
+/* Print styles — only print the invoice section */
+@media print {
+  /* Hide everything except the invoice */
+  body > *:not(#root) { display: none !important; }
+  
+  /* If your layout has a wrapper around the invoice, ensure only the invoice is visible */
+  #printable-invoice {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Ensure logo prints correctly — never block it */
+  img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Keep colors in print */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 99px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B8860B;
+}
