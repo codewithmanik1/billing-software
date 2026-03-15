@@ -13,12 +13,13 @@ import mjLogo from '../../assets/mj_logo.png';
 
 const invoiceItemSchema = z.object({
   id: z.string().optional(),
-  itemName: z.string().min(1, 'Item name required'),
-  purity: z.enum(['24K', '22K', '18K', '14K']),
+  description: z.string().min(1, 'Item name required'),
+  metalType: z.enum(['24K', '22K', '18K', '14K']),
   weightGrams: z.number().min(0.01, 'Weight > 0'),
   ratePerGram: z.number().min(1, 'Rate > 0'),
   makingCharges: z.number().min(0, 'Cannot be negative'),
-  amount: z.number()
+  discount: z.number().nonnegative().default(0),
+  lineTotal: z.number()
 });
 
 const invoiceSchema = z.object({
@@ -70,7 +71,7 @@ export const InvoiceForm: React.FC = () => {
     defaultValues: {
       customerId: '',
       invoiceDate: format(new Date(), 'yyyy-MM-dd'),
-      items: [{ itemName: '', purity: '22K', weightGrams: 0, ratePerGram: 0, makingCharges: 0, amount: 0 }],
+      items: [{ description: '', metalType: '22K', weightGrams: 0, ratePerGram: 0, makingCharges: 0, discount: 0, lineTotal: 0 }],
       discount: 0,
       gstPercent: 3,
       notes: ''
@@ -84,11 +85,11 @@ export const InvoiceForm: React.FC = () => {
         customerId: existingInvoice.customerId,
         invoiceDate: format(new Date(existingInvoice.invoiceDate), 'yyyy-MM-dd'),
         items: existingInvoice.items.map((item: any) => ({
-          ...item,
-          weightGrams: Number(item.weightGrams),
-          ratePerGram: Number(item.ratePerGram),
-          makingCharges: Number(item.makingCharges),
-          amount: Number(item.amount)
+          weightGrams: Number(item.weightGrams) || 0,
+          ratePerGram: Number(item.ratePerGram) || 0,
+          makingCharges: Number(item.makingCharges) || 0,
+          discount: Number(item.discount || 0),
+          lineTotal: Number(item.lineTotal || item.amount || 0)
         })),
         discount: Number(existingInvoice.discount),
         gstPercent: Number(existingInvoice.gstPercent),
@@ -114,16 +115,16 @@ export const InvoiceForm: React.FC = () => {
       const weight = parseFloat(String(item.weightGrams)) || 0;
       const rate = parseFloat(String(item.ratePerGram)) || 0;
       const making = parseFloat(String(item.makingCharges)) || 0;
-      // Note: discount is global in this schema, so per-item disc is 0 unless added to schema
-      const amount = (weight * rate) + making;
+      const disc = parseFloat(String(item.discount)) || 0;
+      const lineTotal = (weight * rate) + making - disc;
       
-      if (item.amount !== amount) {
-        setValue(`items.${index}.amount`, amount, { shouldValidate: true });
+      if (item.lineTotal !== lineTotal) {
+        setValue(`items.${index}.lineTotal`, lineTotal, { shouldValidate: true });
       }
     });
   }, [JSON.stringify(watchItems), setValue]);
 
-  const subtotal = watchItems.reduce((sum, item) => sum + (Number(item?.amount) || 0), 0);
+  const subtotal = watchItems.reduce((sum, item) => sum + (Number(item?.lineTotal) || 0), 0);
   const amountAfterDiscount = Math.max(0, subtotal - Number(watchDiscount));
   const gstAmount = (amountAfterDiscount * Number(watchGstPercent)) / 100;
   const grandTotal = amountAfterDiscount + gstAmount;
@@ -187,168 +188,141 @@ export const InvoiceForm: React.FC = () => {
 
       <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
         {/* Invoice Letterhead Preview Section */}
-        <div className="card p-6 bg-white dark:bg-dark-800 shadow-md rounded-xl flex justify-between items-center">
-           <div className="flex items-center gap-4">
-              <img
-                src={mjLogo}
-                alt="More Jwellers"
-                className="w-12 h-12 rounded-lg object-contain bg-[#FBF0E4] p-1 shadow-sm"
-              />
-              <div>
-                <h2 className="text-[#1A1209] dark:text-[#F5F5F0] text-lg font-bold uppercase">More Jewellers</h2>
-                <p className="text-[#B8860B] text-[10px] font-bold uppercase tracking-wider">Main Road, Mehkar, Bidar, Karnataka</p>
+        <div className="card p-8 bg-white dark:bg-[#1A1A1A] shadow-xl rounded-2xl flex justify-between items-center border border-gray-100 dark:border-dark-800">
+           <div className="flex items-center gap-6">
+              <div className="relative group">
+                <div className="absolute inset-0 rounded-2xl bg-[#B8860B]/10 blur-xl group-hover:blur-2xl transition-all duration-500" />
+                <img
+                  src={mjLogo}
+                  alt="More Jewellers"
+                  className="relative w-20 h-20 rounded-2xl object-contain bg-white p-2 shadow-inner border border-gray-100"
+                />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-[#B8860B] text-2xl font-bold uppercase tracking-tight">More Jewellers</h2>
+                <div className="text-[10px] space-y-0.5">
+                   <p className="text-gray-500 uppercase font-bold tracking-widest">Premium Gold & Silver Jewellery</p>
+                   <p className="text-gray-400 font-medium">📞 +91 XXXXX XXXXX</p>
+                   <p className="text-gray-400 font-medium">📍 Your Shop Address, City - PIN</p>
+                </div>
               </div>
            </div>
 
            <div className="text-right">
-              <div className="text-lg font-bold text-[#1A1209] dark:text-[#F5F5F0]">
-                 {isEditing ? existingInvoice?.invoiceNumber : 'NEW-INVOICE'}
+              <h1 className="text-3xl font-black text-[#B8860B] leading-none mb-2">INVOICE</h1>
+              <div className="text-lg font-bold text-gray-900 dark:text-white font-mono tracking-tighter">
+                 {isEditing ? existingInvoice?.invoiceNumber : 'INV-2024-001'}
               </div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase">{formattedDateForHeader || 'SELECT DATE'}</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Date: {formattedDateForHeader || '15 Mar 2026'}</p>
            </div>
         </div>
 
         {/* Header Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 card p-8 rounded-2xl shadow-md space-y-6">
-            <div className="flex items-center gap-2 mb-2">
-               <div className="p-1.5 bg-[#B8860B]/10 rounded-lg text-[#B8860B]"><User size={18} /></div>
-                <h2 className="text-lg font-bold text-[#1A1209] dark:text-[#F5F5F0]">Customer Details</h2>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div className="lg:col-span-3 card p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Customer Details</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
                <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[#6B5E4A] dark:text-gray-400 uppercase tracking-widest">Client Selection <span className="text-red-500">*</span></label>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Select Customer <span className="text-red-500">*</span></label>
                   <Controller
                     control={control}
                     name="customerId"
                     render={({ field }) => (
                       <Combobox value={field.value} onChange={field.onChange}>
                         <div className="relative">
-                          <div className="relative">
-                             <Combobox.Input
-                               className="input-field pl-10"
-                               displayValue={(id: string) => customers.find((c: any) => c.id === id)?.name || existingInvoice?.customer.name || ''}
-                               onChange={(event) => setCustomerQuery(event.target.value)}
-                               placeholder="Search registered clients..."
-                             />
-                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
-                                <Search size={16} />
-                             </div>
-                          </div>
-                          <Combobox.Options className="absolute z-20 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 py-1 text-base shadow-2xl ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-                            {customers.length === 0 && customerQuery !== '' ? (
-                              <div className="relative cursor-default select-none py-4 px-4 text-center">
-                                <p className="text-gray-400 italic text-sm">No client record found.</p>
-                                <button type="button" onClick={() => navigate('/customers')} className="text-[#B8860B] text-xs font-bold uppercase mt-2 hover:underline">Register New Client</button>
-                              </div>
-                            ) : (
-                              customers.map((customer: any) => (
-                                <Combobox.Option
-                                  key={customer.id}
-                                  className={({ active }) => `relative cursor-pointer select-none py-3 pl-4 pr-4 transition-colors ${active ? 'bg-[#FFF8E7] dark:bg-dark-700 text-[#B8860B]' : 'text-gray-700 dark:text-gray-200'}`}
-                                  value={customer.id}
-                                >
-                                  <div className="flex justify-between items-center">
-                                     <div className="font-bold">{customer.name}</div>
-                                     <div className="text-[10px] font-bold opacity-60 font-mono tracking-tighter">{customer.phone}</div>
-                                  </div>
-                                  <div className="text-[10px] opacity-50 mt-0.5 truncate">{customer.address || 'No address provided'}</div>
+                          <Combobox.Input
+                            className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none transition-all"
+                            displayValue={(id: string) => customers.find((c: any) => c.id === id)?.name || existingInvoice?.customer.name || ''}
+                            onChange={(event) => setCustomerQuery(event.target.value)}
+                            placeholder="Rajesh Sharma"
+                          />
+                          <Combobox.Options className="absolute z-20 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 py-1 text-base shadow-2xl">
+                            {/* ... same customers map ... */}
+                            {customers.map((customer: any) => (
+                                <Combobox.Option key={customer.id} className={({ active }) => `relative cursor-pointer select-none py-3 pl-4 pr-4 ${active ? 'bg-[#B8860B]/10 text-[#B8860B]' : 'text-gray-700 animate-in fade-in transition-all'}`} value={customer.id}>
+                                  <div className="font-bold">{customer.name}</div>
                                 </Combobox.Option>
-                              ))
-                            )}
+                            ))}
                           </Combobox.Options>
                         </div>
                       </Combobox>
                     )}
                   />
-                  {errors.customerId && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase tracking-tight">{errors.customerId.message}</p>}
                </div>
 
-               <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-[#6B5E4A] dark:text-gray-400 uppercase tracking-widest">Registry Date <span className="text-red-500">*</span></label>
-                  <input type="date" {...register('invoiceDate')} className="input-field" />
-                  {errors.invoiceDate && <p className="text-red-500 text-[10px] font-bold mt-1 uppercase tracking-tight">{errors.invoiceDate.message}</p>}
-               </div>
+               {selectedCustomerObj ? (
+                 <div className="bg-gray-50 dark:bg-dark-900 p-6 rounded-2xl space-y-2 border border-blue-50/50">
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Phone: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.phone}</span></p>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Email: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.email || 'rajesh@example.com'}</span></p>
+                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Address: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.address || '12 MG Road, Bangalore'}</span></p>
+                 </div>
+               ) : (
+                 <div className="h-28 bg-gray-50 dark:bg-dark-900 rounded-2xl flex items-center justify-center border border-dashed border-gray-200">
+                    <p className="text-xs text-gray-400 font-medium italic">Select a customer to view more details</p>
+                 </div>
+               )}
             </div>
-
-            {selectedCustomerObj && (
-              <div className="bg-[#FFF8E7]/50 dark:bg-dark-900/50 p-4 rounded-xl border border-[#B8860B]/10 transition-all flex items-start gap-4 animate-in slide-in-from-top-2 duration-300">
-                 <div className="w-10 h-10 bg-white dark:bg-dark-800 rounded-lg flex items-center justify-center text-[#B8860B] shadow-sm flex-shrink-0">
-                    <User size={20} />
-                 </div>
-                 <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start">
-                       <p className="font-bold text-[#1A1209] dark:text-[#F5F5F0] pb-1 border-b border-[#B8860B]/20 w-fit">{selectedCustomerObj.name}</p>
-                       {selectedCustomerObj.gstin && <span className="text-[9px] font-bold bg-[#B8860B] text-white px-2 py-0.5 rounded uppercase">{selectedCustomerObj.gstin}</span>}
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 mt-2">
-                       <p className="text-[11px] text-gray-500 font-medium">📱 {selectedCustomerObj.phone}</p>
-                       {selectedCustomerObj.email && <p className="text-[11px] text-gray-500 font-medium truncate">✉️ {selectedCustomerObj.email}</p>}
-                    </div>
-                    {selectedCustomerObj.address && <p className="text-[10px] text-gray-400 mt-1 italic leading-relaxed">{selectedCustomerObj.address}</p>}
-                 </div>
-              </div>
-            )}
           </div>
 
-          <div className="card p-8 rounded-2xl shadow-md">
-            <div className="flex items-center gap-2 mb-4">
-               <div className="p-1.5 bg-[#B8860B]/10 rounded-lg text-[#B8860B]"><Calculator size={18} /></div>
-               <h2 className="text-lg font-serif text-[#1A1209] dark:text-[#F5F5F0]">Registry Meta</h2>
-            </div>
+          <div className="lg:col-span-2 card p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Invoice Meta</h2>
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-[#6B5E4A] dark:text-gray-400 uppercase tracking-widest">Internal Narrative</label>
-                <textarea {...register('notes')} className="input-field min-h-[148px] py-3 text-sm italic" placeholder="Add specific details or special instructions..." />
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Date <span className="text-red-500">*</span></label>
+                  <input type="date" {...register('invoiceDate')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Notes / Remarks</label>
+                <textarea {...register('notes')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none h-24 italic" placeholder="Thank you for your business!" />
               </div>
             </div>
           </div>
         </div>
 
         {/* Line Items */}
-        <div className="card p-0 rounded-2xl shadow-xl border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 dark:border-dark-800 flex justify-between items-center bg-gray-50/50 dark:bg-dark-900">
-            <h2 className="text-xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">Invoice Items</h2>
+        <div className="card p-0 rounded-2xl shadow-xl border border-gray-100 dark:border-dark-800 overflow-hidden">
+          <div className="p-6 border-b border-gray-50 dark:border-dark-800 flex justify-between items-center bg-white dark:bg-dark-900">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Line Items</h2>
             <button 
               type="button" 
-              onClick={() => append({ itemName: '', purity: '22K', weightGrams: 0, ratePerGram: 0, makingCharges: 0, amount: 0 })}
-              className="px-4 py-2 bg-[#B8860B] hover:bg-[#8B6508] text-white rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all shadow-lg shadow-[#B8860B]/20 flex items-center gap-2"
+              onClick={() => append({ description: '', metalType: '22K', weightGrams: 0, ratePerGram: 0, makingCharges: 0, discount: 0, lineTotal: 0 })}
+              className="px-4 py-2 bg-gray-50 dark:bg-dark-800 hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
             >
-              <Plus size={14} /> Add Ornament
+              <Plus size={14} /> Add Item
             </button>
           </div>
           
-          <div className="overflow-x-auto overflow-y-visible">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="bg-[#B8860B] text-white">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-gray-50 dark:bg-dark-900 border-b border-gray-100 dark:border-dark-800">
                 <tr>
-                  <th className="px-6 py-4 font-bold uppercase tracking-widest text-[10px] w-[35%]">Ornament Item</th>
-                  <th className="px-4 py-4 font-bold uppercase tracking-widest text-[10px] text-center">Purity</th>
-                  <th className="px-4 py-4 font-bold uppercase tracking-widest text-[10px] text-right">Net Wt (g)</th>
-                  <th className="px-4 py-4 font-bold uppercase tracking-widest text-[10px] text-right">Rate / g</th>
-                  <th className="px-4 py-4 font-bold uppercase tracking-widest text-[10px] text-right">Making</th>
-                  <th className="px-6 py-4 font-bold uppercase tracking-widest text-[10px] text-right">Amnt (₹)</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Item Name</th>
+                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center">Purity</th>
+                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Weight (g)</th>
+                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Rate/g (₹)</th>
+                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Making Chg (₹)</th>
+                  <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Amount (₹)</th>
                   <th className="px-4 py-4 text-center"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-dark-800">
                 {fields.map((field, index) => (
-                  <tr key={field.id} className="group hover:bg-[#FFF8E7]/30 dark:hover:bg-dark-900 transition-colors">
+                  <tr key={field.id} className="bg-white dark:bg-dark-900 transition-colors">
                     <td className="px-6 py-4">
                       <input 
-                        {...register(`items.${index}.itemName`)} 
-                        className={`w-full bg-transparent border-b-2 ${errors.items?.[index]?.itemName ? 'border-red-400' : 'border-gray-100 dark:border-dark-800'} py-2 text-[#1A1209] dark:text-white font-bold focus:outline-none focus:border-[#B8860B] transition-colors`}
-                        placeholder="e.g. Traditional Jhumka..."
+                        {...register(`items.${index}.description`)} 
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        placeholder="18K Gold Earrings"
                       />
                     </td>
                     <td className="px-4 py-4">
                       <select 
-                        {...register(`items.${index}.purity`)} 
-                        className="w-full bg-transparent border-b-2 border-gray-100 dark:border-dark-800 py-2 text-[#B8860B] font-bold text-center focus:outline-none focus:border-[#B8860B]"
+                        {...register(`items.${index}.metalType`)} 
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-2 py-2 text-gray-900 dark:text-white font-bold text-center appearance-none focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       >
-                        <option value="24K">24K (Pure)</option>
-                        <option value="22K">22K (Std)</option>
+                        <option value="24K">24K</option>
+                        <option value="22K">22K</option>
                         <option value="18K">18K</option>
                         <option value="14K">14K</option>
                       </select>
@@ -357,26 +331,26 @@ export const InvoiceForm: React.FC = () => {
                       <input 
                         type="number" step="0.001"
                         {...register(`items.${index}.weightGrams`, { valueAsNumber: true })} 
-                        className="w-full bg-transparent border-b-2 border-gray-100 dark:border-dark-800 py-2 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:outline-none focus:border-[#B8860B]"
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       />
                     </td>
                     <td className="px-4 py-4">
                       <input 
                         type="number" step="1"
                         {...register(`items.${index}.ratePerGram`, { valueAsNumber: true })} 
-                        className="w-full bg-transparent border-b-2 border-gray-100 dark:border-dark-800 py-2 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:outline-none focus:border-[#B8860B]"
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       />
                     </td>
                     <td className="px-4 py-4">
                       <input 
                         type="number" step="1"
                         {...register(`items.${index}.makingCharges`, { valueAsNumber: true })} 
-                        className="w-full bg-transparent border-b-2 border-gray-100 dark:border-dark-800 py-2 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:outline-none focus:border-[#B8860B]"
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       />
                     </td>
                     <td className="px-6 py-4 text-right">
-                       <span className="text-[#1A1209] dark:text-white font-bold text-lg font-mono">
-                          {new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(watchItems[index]?.amount || 0)}
+                       <span className="text-gray-900 dark:text-white font-black text-sm font-mono tracking-tighter">
+                          {formatCurrency(watchItems[index]?.lineTotal || 0)}
                        </span>
                     </td>
                     <td className="px-4 py-4 text-center">
@@ -384,9 +358,9 @@ export const InvoiceForm: React.FC = () => {
                         type="button" 
                         onClick={() => remove(index)}
                         disabled={fields.length === 1}
-                        className="p-2 text-gray-300 hover:text-red-500 transition-all rounded-xl hover:bg-red-500/10 disabled:opacity-0"
+                        className="p-1.5 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50 disabled:opacity-0"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>
@@ -394,78 +368,64 @@ export const InvoiceForm: React.FC = () => {
               </tbody>
             </table>
           </div>
-          {errors.items && <div className="p-4 bg-red-50 text-red-500 text-[10px] font-bold uppercase tracking-wider text-center">{errors.items.message || 'Please verify that all line items have valid weights and rates'}</div>}
         </div>
 
         {/* Totals Section */}
-        <div className="flex justify-end gap-6">
-           <div className="w-full lg:w-4/12 card p-8 rounded-2xl shadow-2xl bg-white dark:bg-dark-800 border-t-4 border-[#B8860B] space-y-6">
-              <div className="space-y-4">
-                  <div className="flex justify-between items-center group">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Aggregate Registry</span>
-                    <span className="font-bold text-[#1A1209] dark:text-white font-mono">{formatCurrency(subtotal)}</span>
-                  </div>
-                  
-                  <div className="flex justify-between items-center group">
-                    <div className="flex flex-col">
-                       <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Adjustment Discount</span>
-                       <span className="text-[9px] text-[#B8860B] font-bold">Lumpsum Reduction</span>
-                    </div>
-                    <div className="relative">
-                       <input 
-                         type="number" 
-                         {...register('discount', { valueAsNumber: true })} 
-                         className="w-28 bg-[#FFF8E7]/50 dark:bg-dark-900 border border-[#B8860B]/20 rounded-lg px-3 py-1.5 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:outline-none focus:ring-1 focus:ring-[#B8860B]"
-                       />
-                       <span className="absolute right-0 top-0 -mt-2 -mr-1 text-[10px] bg-[#B8860B] text-white px-1.5 rounded-full">₹</span>
-                    </div>
+        <div className="flex justify-end">
+           <div className="w-full lg:w-3/12 card p-8 rounded-2xl shadow-xl bg-gray-50/50 dark:bg-dark-900 border border-gray-100 dark:border-dark-800 space-y-4">
+              <div className="space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-gray-500 uppercase tracking-widest">Subtotal</span>
+                    <span className="font-bold text-gray-900 dark:text-white font-mono">₹{formatCurrency(subtotal)}</span>
                   </div>
                   
                   <div className="flex justify-between items-center">
-                    <div className="flex flex-col">
-                       <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Tax Provision</span>
-                       <span className="text-[9px] text-[#B8860B] font-bold">Combined GST Calculation</span>
-                    </div>
-                    <select 
-                      {...register('gstPercent', { valueAsNumber: true })} 
-                      className="w-28 bg-[#FFF8E7]/50 dark:bg-dark-900 border border-[#B8860B]/20 rounded-lg px-3 py-1.5 text-[#1A1209] dark:text-white font-bold text-center focus:outline-none focus:ring-1 focus:ring-[#B8860B]"
-                    >
-                      <option value={0}>EXEMPT (0%)</option>
-                      <option value={1.5}>MIN (1.5%)</option>
-                      <option value={3}>STD (3%)</option>
-                    </select>
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Discount (₹)</span>
+                    <input 
+                      type="number" 
+                      {...register('discount', { valueAsNumber: true })} 
+                      className="w-20 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-1 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                    />
                   </div>
                   
-                  <div className="flex justify-between items-center text-xs text-gray-400 font-bold border-t border-gray-50 dark:border-dark-700 pt-4">
-                    <span className="uppercase tracking-[0.2em]">Accrued GST</span>
-                    <span className="font-mono">{formatCurrency(gstAmount)}</span>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">GST (%)</span>
+                    <input 
+                      type="number" 
+                      {...register('gstPercent', { valueAsNumber: true })} 
+                      className="w-20 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-1 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                    />
+                  </div>
+                  
+                  <div className="flex justify-between items-center text-xs text-gray-500 font-bold border-t border-gray-200 dark:border-dark-800 pt-3">
+                    <span className="uppercase tracking-widest text-[10px]">GST Amount</span>
+                    <span className="font-mono">₹{formatCurrency(gstAmount)}</span>
                   </div>
               </div>
 
-              <div className="pt-6 border-t-2 border-gray-100 dark:border-dark-700">
-                  <p className="text-[10px] font-bold text-[#9A9A8A] uppercase tracking-[0.4em] mb-1 text-right">Net Final Valuation</p>
-                  <div className="flex justify-end items-baseline gap-2">
-                     <span className="text-4xl font-bold text-[#1A1209] dark:text-[#F5F5F0] font-mono tracking-tighter">
-                        {new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(grandTotal)}
+              <div className="pt-4 border-t-2 border-gray-200 dark:border-dark-800">
+                  <div className="flex justify-between items-baseline group">
+                     <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Grand Total</span>
+                     <span className="text-2xl font-black text-[#B8860B] font-mono tracking-tighter">
+                        ₹{formatCurrency(grandTotal)}
                      </span>
-                     <span className="text-sm font-bold text-[#B8860B]">INR</span>
                   </div>
               </div>
            </div>
         </div>
 
         {/* Form Actions */}
-        <div className="flex justify-end gap-6 border-t border-gray-100 dark:border-dark-800 pt-8 mt-4">
-          <button type="button" onClick={() => navigate(-1)} className="px-8 py-3 text-gray-400 hover:text-gray-600 font-bold uppercase tracking-[0.2em] text-[10px] transition-all">
-            Discard Registry
+        <div className="flex justify-end gap-4 mt-8">
+          <button type="button" onClick={() => navigate(-1)} className="px-10 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold text-xs uppercase tracking-widest transition-all">
+            Cancel
           </button>
           <button 
              type="submit" 
              disabled={createMutation.isPending || updateMutation.isPending}
-             className="bg-[#1A1209] hover:bg-[#B8860B] text-white px-12 py-4 rounded-2xl font-bold uppercase tracking-[0.2em] text-[10px] shadow-2xl shadow-gold/20 flex items-center gap-3 transition-all"
+             className="bg-[#B8860B] hover:bg-[#8B6508] text-white px-10 py-3 rounded-lg font-bold uppercase tracking-widest text-xs flex items-center gap-2 shadow-lg shadow-[#B8860B]/20 transition-all"
           >
-            {createMutation.isPending || updateMutation.isPending ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-            {isEditing ? 'Commit Amendments' : 'Generate Registry'}
+            {createMutation.isPending || updateMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            {isEditing ? 'Update Invoice' : 'Save Invoice'}
           </button>
         </div>
       </form>
