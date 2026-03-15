@@ -202,8 +202,8 @@ export const InvoiceForm: React.FC = () => {
                 <h2 className="text-[#B8860B] text-2xl font-bold uppercase tracking-tight">More Jewellers</h2>
                 <div className="text-[10px] space-y-0.5">
                    <p className="text-gray-500 uppercase font-bold tracking-widest">Premium Gold & Silver Jewellery</p>
-                   <p className="text-gray-400 font-medium">📞 +91 XXXXX XXXXX</p>
-                   <p className="text-gray-400 font-medium">📍 Your Shop Address, City - PIN</p>
+                   <p className="text-gray-400 font-medium">Mob: 6281 218 824 &nbsp;|&nbsp; morejewellers45@gmail.com</p>
+                   <p className="text-gray-400 font-medium">Main Road, Mehkar - 585416, Tq. Bhalki, Dist. Bidar, Karnataka</p>
                 </div>
               </div>
            </div>

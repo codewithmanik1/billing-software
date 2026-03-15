@@ -203,7 +203,7 @@ export const InvoiceDetail: React.FC = () => {
             <div className="flex items-center gap-6">
               <img
                 src={mjLogo}
-                alt="More Jwellers"
+                alt="More Jewellers"
                 className="w-20 h-20 rounded-2xl object-contain bg-[#FBF0E4] p-1 border border-[#B8860B]/30"
               />
               <div>
