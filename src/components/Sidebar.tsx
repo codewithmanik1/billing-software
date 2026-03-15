@@ -90,13 +90,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
             style={{ background: '#FBF0E4', padding: '2px' }}
           />
           <div className="flex flex-col leading-tight min-w-0 flex-1">
-            <span
-              className="text-[#FFD700] font-bold text-sm tracking-[0.08em] uppercase truncate"
-              style={{ fontFamily: "'Playfair Display', serif" }}
-            >
+            <span className="text-[#FFD700] font-bold text-lg uppercase truncate">
               More Jwellers
             </span>
-            <span className="text-[#9A9A8A] text-[10px] tracking-[0.15em] uppercase truncate">
+            <span className="text-[#9A9A8A] text-xs uppercase truncate">
               Billing System
             </span>
           </div>

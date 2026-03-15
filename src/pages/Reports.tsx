@@ -1,12 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { useStore } from '../store/useStore';
-import { IndianRupee, TrendingUp, TrendingDown, Calendar, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import api from '../lib/api';
+import { TrendingUp, TrendingDown, Calendar, Loader2 } from 'lucide-react';
 import {
-  format, isAfter, isBefore, startOfDay, endOfDay,
-  subDays, startOfMonth, endOfMonth, startOfYear
+  format, subDays, startOfMonth, endOfMonth, startOfYear
 } from 'date-fns';
 import { Link } from 'react-router-dom';
-import type { Invoice } from '../types';
 import { Pagination } from '../components/ui/Pagination';
 
 type Preset = 'today' | '7days' | '30days' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'allTime';
@@ -40,21 +39,41 @@ function getPresetDates(preset: Preset): { start: string; end: string } {
   }
 }
 
-export const Reports: React.FC = () => {
-  const { invoices } = useStore();
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
+export const Reports: React.FC = () => {
   const [activePreset, setActivePreset] = useState<Preset>('30days');
   const [startDate, setStartDate] = useState(format(subDays(today, 30), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(today, 'yyyy-MM-dd'));
   const [appliedStart, setAppliedStart] = useState(startDate);
   const [appliedEnd, setAppliedEnd] = useState(endDate);
 
-  // Pagination
+  // Pagination for outstanding invoices
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
+  // Fetching Report Summary (KPIs)
+  const { data: summaryRes, isLoading: isLoadingSummary } = useQuery({
+    queryKey: ['reports-summary', appliedStart, appliedEnd],
+    queryFn: async () => {
+      const res = await api.get(`/reports/summary?fromDate=${appliedStart}&toDate=${appliedEnd}`);
+      return res.data;
+    },
+  });
+
+  // Fetching Outstanding Invoices for the period
+  const { data: outstandingRes, isLoading: isLoadingOutstanding } = useQuery({
+    queryKey: ['reports-outstanding', appliedStart, appliedEnd, currentPage, itemsPerPage],
+    queryFn: async () => {
+      const res = await api.get(`/invoices?status=unpaid&fromDate=${appliedStart}&toDate=${appliedEnd}&page=${currentPage}&limit=${itemsPerPage}`);
+      return res.data;
+    },
+  });
+
+  const summary = summaryRes?.data || { totalSalesGenerated: 0, totalAmountCollected: 0, totalAmountPending: 0, invoiceCount: 0 };
+  const outstandingInvoices = outstandingRes?.data?.invoices || [];
+  const totalOutstanding = outstandingRes?.data?.pagination?.total || 0;
 
   const applyFilter = () => {
     setAppliedStart(startDate);
@@ -72,192 +91,186 @@ export const Reports: React.FC = () => {
     setCurrentPage(1);
   };
 
-  const reportData = useMemo(() => {
-    const start = startOfDay(new Date(appliedStart));
-    const end = endOfDay(new Date(appliedEnd));
-
-    const filteredInvoices = invoices.filter(inv => {
-      const d = new Date(inv.date);
-      return (isAfter(d, start) || d.getTime() === start.getTime()) &&
-             (isBefore(d, end) || d.getTime() === end.getTime());
-    });
-
-    let totalSales = 0, totalCollected = 0, totalPending = 0;
-    const unpaidInvoices: Invoice[] = [];
-
-    filteredInvoices.forEach(inv => {
-      totalSales += inv.totalAmount;
-      totalCollected += inv.amountPaid;
-      totalPending += inv.pendingAmount;
-      if (inv.pendingAmount > 0) unpaidInvoices.push(inv);
-    });
-
-    return {
-      totalSales, totalCollected, totalPending,
-      invoiceCount: filteredInvoices.length,
-      unpaidInvoices: unpaidInvoices.sort((a, b) => b.pendingAmount - a.pendingAmount),
-    };
-  }, [invoices, appliedStart, appliedEnd]);
-
-  const paginatedUnpaid = reportData.unpaidInvoices.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
   const dayCount = Math.round(
     (new Date(appliedEnd).getTime() - new Date(appliedStart).getTime()) / (1000 * 60 * 60 * 24)
   ) + 1;
 
+  const isLoading = isLoadingSummary || isLoadingOutstanding;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-12">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-serif text-[#1A1209] dark:text-[#F5F5F0]">Financial Reports</h1>
-        <p className="text-sm text-[#6B5E4A] dark:text-[#9A9A8A] mt-1">
-          📊 Showing: <span className="font-medium text-[#B8860B]">
-            {format(new Date(appliedStart), 'dd MMM yyyy')} – {format(new Date(appliedEnd), 'dd MMM yyyy')}
-          </span>
-          <span className="ml-2 text-xs">({dayCount} days, {reportData.invoiceCount} invoices)</span>
-        </p>
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">Reports</h1>
+          <p className="text-sm text-[#6B5E4A] dark:text-[#9A9A8A] mt-1">
+            📊 Metric Period: <span className="font-bold text-[#B8860B]">
+              {format(new Date(appliedStart), 'dd MMM yyyy')} – {format(new Date(appliedEnd), 'dd MMM yyyy')}
+            </span>
+            <span className="ml-2 text-xs font-mono">({dayCount} Days)</span>
+          </p>
+        </div>
+        {isLoading && (
+          <div className="flex items-center gap-2 text-[#B8860B] text-xs font-bold uppercase tracking-widest bg-[#FFF8E7] px-4 py-2 rounded-full border border-[#B8860B]/20">
+            <Loader2 size={14} className="animate-spin" />
+            Recalculating...
+          </div>
+        )}
       </div>
 
-      {/* Date Range Filter Bar */}
-      <div className="card p-4 space-y-4">
-        {/* Inputs row */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 bg-[#FAFAF7] dark:bg-[#0A0A0A] border border-[#E8E0D0] dark:border-[#2E2E2E] rounded-lg px-3 py-2">
-            <Calendar size={16} className="text-[#B8860B]" />
-            <span className="text-xs text-[#6B5E4A] dark:text-[#9A9A8A] font-medium">From:</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => { setStartDate(e.target.value); setActivePreset('allTime'); }}
-              className="bg-transparent text-sm text-[#1A1209] dark:text-[#F5F5F0] focus:outline-none"
-            />
-          </div>
-          <span className="text-[#9A9A8A]">→</span>
-          <div className="flex items-center gap-2 bg-[#FAFAF7] dark:bg-[#0A0A0A] border border-[#E8E0D0] dark:border-[#2E2E2E] rounded-lg px-3 py-2">
-            <Calendar size={16} className="text-[#B8860B]" />
-            <span className="text-xs text-[#6B5E4A] dark:text-[#9A9A8A] font-medium">To:</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => { setEndDate(e.target.value); setActivePreset('allTime'); }}
-              className="bg-transparent text-sm text-[#1A1209] dark:text-[#F5F5F0] focus:outline-none"
-            />
-          </div>
-          <button
-            onClick={applyFilter}
-            className="flex items-center gap-1.5 px-4 py-2 bg-[#B8860B] hover:bg-[#FFD700] text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Apply <ChevronRight size={14} />
-          </button>
-        </div>
-
-        {/* Quick Select Presets */}
-        <div className="flex flex-wrap gap-2">
-          {PRESETS.map((p) => (
+      {/* Control Panel */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-3 card p-6 rounded-2xl shadow-md space-y-4 border-l-4 border-[#B8860B]">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-3 bg-white dark:bg-dark-900 border border-gray-100 dark:border-dark-800 rounded-xl px-4 py-2 shadow-sm">
+              <Calendar size={16} className="text-[#B8860B]" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setActivePreset('allTime'); }}
+                className="bg-transparent text-sm font-bold text-[#1A1209] dark:text-[#F5F5F0] focus:outline-none"
+              />
+              <span className="text-[#9A9A8A] font-bold mx-1">TO</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setActivePreset('allTime'); }}
+                className="bg-transparent text-sm font-bold text-[#1A1209] dark:text-[#F5F5F0] focus:outline-none"
+              />
+            </div>
             <button
-              key={p.id}
-              onClick={() => handlePreset(p.id)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-all duration-150 ${
-                activePreset === p.id
-                  ? 'bg-[#B8860B] border-[#B8860B] text-white shadow-[0_0_8px_rgba(184,134,11,0.3)]'
-                  : 'bg-transparent border-[#B8860B]/40 text-[#8B6508] dark:text-[#B8860B] hover:border-[#B8860B] hover:bg-[#B8860B]/10'
-              }`}
+              onClick={applyFilter}
+              className="px-6 py-2.5 bg-[#1A1209] hover:bg-[#B8860B] text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg hover:shadow-[#B8860B]/20"
             >
-              {p.label}
+              Update View
             </button>
-          ))}
+          </div>
+
+          <div className="flex flex-wrap gap-2 pt-2">
+            {PRESETS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => handlePreset(p.id)}
+                className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest rounded-full border transition-all ${
+                  activePreset === p.id
+                    ? 'bg-[#B8860B] border-[#B8860B] text-white shadow-md'
+                    : 'bg-white dark:bg-dark-900 border-gray-100 dark:border-dark-800 text-[#6B5E4A] dark:text-gray-400 hover:border-[#B8860B] hover:text-[#B8860B]'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="card p-6 rounded-2xl bg-[#1A1209] text-white">
+           <p className="text-xs text-gray-400 font-medium leading-relaxed">Financial summaries are generated based on the recorded invoice transactions in the database.</p>
         </div>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card p-6 border-t-4 border-t-[#B8860B] text-center">
-          <p className="text-[#6B5E4A] dark:text-[#9A9A8A] font-medium mb-2 uppercase tracking-wider text-xs">Total Sales Generated</p>
-          <div className="flex items-center justify-center gap-2 text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0] mb-1">
-            <IndianRupee size={28} className="text-[#B8860B]" />
-            {formatCurrency(reportData.totalSales).replace('₹', '')}
+        <div className="card p-6 rounded-xl shadow-sm border-t-2 border-[#B8860B] text-center">
+          <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px] mb-2">Total Sales</p>
+          <div className="text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">
+            {formatCurrency(summary.totalSalesGenerated)}
           </div>
-          <p className="text-sm text-[#6B5E4A] dark:text-[#9A9A8A]">{reportData.invoiceCount} invoices in period</p>
+          <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase">{summary.invoiceCount} Invoices</p>
         </div>
 
-        <div className="card p-6 border-t-4 border-t-green-500 text-center">
-          <p className="text-[#6B5E4A] dark:text-[#9A9A8A] font-medium mb-2 uppercase tracking-wider text-xs">Total Amount Collected</p>
-          <div className="flex items-center justify-center gap-2 text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0] mb-1">
-            <TrendingUp size={28} className="text-green-500" />
-            {formatCurrency(reportData.totalCollected)}
+        <div className="card p-8 rounded-2xl shadow-lg border-t-4 border-green-500 text-center hover:translate-y-[-4px] transition-all">
+          <p className="text-[#9A9A8A] font-bold uppercase tracking-[0.2em] text-[10px] mb-4">Total Liquidity Collected</p>
+          <div className="flex items-center justify-center gap-2 text-4xl font-mono font-bold text-green-600 dark:text-green-400 text-shadow-glow">
+            <TrendingUp size={24} className="text-green-500" />
+            {formatCurrency(summary.totalAmountCollected).replace('₹', '')}
           </div>
-          <p className="text-sm text-green-600 dark:text-green-400">
-            {reportData.totalSales > 0 ? Math.round((reportData.totalCollected / reportData.totalSales) * 100) : 0}% recovery rate
+          <p className="mt-4 text-[10px] font-bold uppercase text-green-500/80">
+            {summary.totalSalesGenerated > 0 ? Math.round((summary.totalAmountCollected / summary.totalSalesGenerated) * 100) : 0}% COLLECTION RATIO
           </p>
         </div>
 
-        <div className="card p-6 border-t-4 border-t-red-500 text-center">
-          <p className="text-[#6B5E4A] dark:text-[#9A9A8A] font-medium mb-2 uppercase tracking-wider text-xs">Total Amount Pending</p>
-          <div className="flex items-center justify-center gap-2 text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0] mb-1">
-            <TrendingDown size={28} className="text-red-500" />
-            {formatCurrency(reportData.totalPending)}
+        <div className="card p-8 rounded-2xl shadow-lg border-t-4 border-red-500 text-center hover:translate-y-[-4px] transition-all">
+          <p className="text-[#9A9A8A] font-bold uppercase tracking-[0.2em] text-[10px] mb-4">Outstanding Credit Balance</p>
+          <div className="flex items-center justify-center gap-2 text-4xl font-mono font-bold text-red-600 dark:text-red-400">
+            <TrendingDown size={24} className="text-red-500" />
+            {formatCurrency(summary.totalAmountPending).replace('₹', '')}
           </div>
-          <p className="text-sm text-red-500/80">{reportData.unpaidInvoices.length} invoices pending</p>
+          <p className="mt-4 text-[10px] font-bold uppercase text-red-500/80">
+            ACTION REQUIRED ON {totalOutstanding} ENTRIES
+          </p>
         </div>
       </div>
 
       {/* Outstanding Invoices Table */}
-      {reportData.unpaidInvoices.length > 0 ? (
-        <div className="card p-0">
-          <div className="p-4 border-b border-[#E8E0D0] dark:border-[#2E2E2E] bg-[#F5F0E8] dark:bg-[#0A0A0A]/50">
-            <h2 className="text-lg font-serif text-[#1A1209] dark:text-[#F5F5F0] flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500 inline-block" />
-              Outstanding Invoices in Period
-            </h2>
-          </div>
-          <div className="overflow-x-auto">
+      <div className="card p-0 rounded-2xl shadow-2xl overflow-hidden border-gray-100">
+        <div className="p-6 border-b border-gray-100 dark:border-dark-800 flex justify-between items-center bg-gray-50/50 dark:bg-dark-900">
+          <h2 className="text-xl font-bold text-[#1A1209] dark:text-[#F5F5F0] flex items-center gap-2">
+            Outstanding Payments
+          </h2>
+        </div>
+        
+        <div className="overflow-x-auto min-h-[300px]">
+          {totalOutstanding > 0 ? (
             <table className="w-full text-left text-sm">
-              <thead className="bg-[#F5F0E8] dark:bg-[#0A0A0A] border-b border-[#E8E0D0] dark:border-[#2E2E2E] text-[#6B5E4A] dark:text-[#9A9A8A]">
+              <thead className="bg-[#1A1209] text-white">
                 <tr>
-                  <th className="px-6 py-3 font-medium">Invoice No.</th>
-                  <th className="px-6 py-3 font-medium">Date</th>
-                  <th className="px-6 py-3 font-medium">Customer</th>
-                  <th className="px-6 py-3 font-medium text-right">Invoice Total</th>
-                  <th className="px-6 py-3 font-medium text-right">Pending Balance</th>
+                  <th className="px-8 py-4 font-bold uppercase tracking-widest text-[10px]">Reference</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-widest text-[10px]">Date</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-widest text-[10px]">Recipient Client</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-widest text-[10px] text-right">Registry Total</th>
+                  <th className="px-8 py-4 font-bold uppercase tracking-widest text-[10px] text-right">Debit Balance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E8E0D0] dark:divide-[#2E2E2E]">
-                {paginatedUnpaid.map((inv) => (
-                  <tr key={inv.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 cursor-pointer">
-                    <td className="px-6 py-4 font-medium">
-                      <Link to={`/invoices/${inv.id}`} className="text-[#B8860B] hover:underline">
+              <tbody className="divide-y divide-gray-50 dark:divide-dark-800">
+                {outstandingInvoices.map((inv: any) => (
+                  <tr key={inv.id} className="bg-white dark:bg-dark-900 hover:bg-[#FFF8E7]/50 dark:hover:bg-dark-800 transition-colors group">
+                    <td className="px-8 py-4">
+                      <Link to={`/invoices/${inv.id}`} className="text-[#B8860B] font-mono font-bold hover:underline">
                         {inv.invoiceNumber}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-[#6B5E4A] dark:text-[#9A9A8A]">{format(new Date(inv.date), 'dd MMM yyyy')}</td>
-                    <td className="px-6 py-4 text-[#1A1209] dark:text-[#F5F5F0]">{inv.customer.name}</td>
-                    <td className="px-6 py-4 text-right text-[#1A1209] dark:text-[#F5F5F0]">{formatCurrency(inv.totalAmount)}</td>
-                    <td className="px-6 py-4 text-right font-medium text-red-500">{formatCurrency(inv.pendingAmount)}</td>
+                    <td className="px-6 py-4 text-[#6B5E4A] dark:text-gray-400 font-medium">{format(new Date(inv.invoiceDate), 'dd MMM yyyy')}</td>
+                    <td className="px-6 py-4">
+                       <div className="flex flex-col">
+                          <span className="text-[#1A1209] dark:text-[#F5F5F0] font-bold">{inv.customer.name}</span>
+                          <span className="text-[10px] text-gray-400 font-mono tracking-tighter">{inv.customer.phone}</span>
+                       </div>
+                    </td>
+                    <td className="px-6 py-4 text-right text-[#1A1209] dark:text-[#F5F5F0] font-mono font-medium">{formatCurrency(inv.totalAmount)}</td>
+                    <td className="px-8 py-4 text-right">
+                       <span className="text-red-600 dark:text-red-400 font-mono font-bold text-lg">
+                          {formatCurrency(inv.pendingAmount)}
+                       </span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
-          <div className="p-4 border-t border-[#E8E0D0] dark:border-[#2E2E2E]">
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 bg-gray-50/30 dark:bg-black/10">
+               <div className="w-16 h-16 bg-green-500/10 rounded-full flex items-center justify-center text-green-500 mb-4">
+                  <TrendingUp size={32} />
+               </div>
+               <p className="text-lg font-serif text-[#1A1209] dark:text-[#F5F5F0]">Perfect Credit Standing</p>
+               <p className="text-xs text-gray-400 font-medium uppercase tracking-widest mt-1">No outstanding balances detected in this period.</p>
+            </div>
+          )}
+        </div>
+
+        {totalOutstanding > itemsPerPage && (
+          <div className="p-6 border-t border-gray-100 dark:border-dark-800 bg-gray-50/30 dark:bg-black/10">
             <Pagination
               currentPage={currentPage}
-              totalItems={reportData.unpaidInvoices.length}
+              totalItems={totalOutstanding}
               itemsPerPage={itemsPerPage}
               onPageChange={setCurrentPage}
               onItemsPerPageChange={(n) => { setItemsPerPage(n); setCurrentPage(1); }}
-              entityName="outstanding invoices"
+              entityName="debit entries"
             />
           </div>
-        </div>
-      ) : (
-        <div className="card p-12 text-center">
-          <TrendingUp size={40} className="mx-auto mb-3 text-[#9A9A8A] opacity-30" />
-          <p className="text-[#6B5E4A] dark:text-[#9A9A8A]">No outstanding invoices in this period.</p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };
+

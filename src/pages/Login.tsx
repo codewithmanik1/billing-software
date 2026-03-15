@@ -1,21 +1,36 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
+import { useMutation } from '@tanstack/react-query';
+import api from '../lib/api';
 import { toast } from 'sonner';
 import mjLogo from '../assets/mj_logo.png';
 
 export const Login: React.FC = () => {
-  const login = useStore(state => state.login);
+  const storeLogin = useStore(state => state.login);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
 
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: any) => {
+      const response = await api.post('/auth/login', credentials);
+      return response.data;
+    },
+    onSuccess: (res) => {
+      if (res.success) {
+        storeLogin(res.data.token, res.data.user);
+        toast.success('Successfully logged in');
+      } else {
+        toast.error(res.message || 'Login failed');
+      }
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Invalid username or password');
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === 'admin' && password === 'admin') {
-      login();
-      toast.success('Successfully logged in');
-    } else {
-      toast.error('Invalid credentials');
-    }
+    loginMutation.mutate({ username, password });
   };
 
   return (
@@ -30,7 +45,6 @@ export const Login: React.FC = () => {
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-gold-dark via-gold-light to-gold-dark" />
           
           <div className="flex flex-col items-center mb-8">
-            {/* Logo with gold ring glow */}
             <div className="relative mb-5">
               <div className="absolute inset-0 rounded-2xl bg-[#B8860B]/20 blur-md scale-110" />
               <img
@@ -45,18 +59,13 @@ export const Login: React.FC = () => {
               />
             </div>
 
-            {/* Shop name under logo */}
-            <h1
-              className="text-[#FFD700] text-2xl font-bold tracking-[0.2em] uppercase text-center"
-              style={{ fontFamily: "'Playfair Display', serif" }}
-            >
+            <h1 className="text-[#B8860B] text-2xl font-bold uppercase text-center">
               More Jwellers
             </h1>
-            <p className="text-[#9A9A8A] text-xs tracking-[0.25em] uppercase mt-1 text-center">
+            <p className="text-gray-500 text-xs uppercase mt-1 text-center font-medium">
               Billing Management System
             </p>
 
-            {/* Decorative gold divider */}
             <div className="flex items-center gap-3 mt-4 w-full max-w-[200px]">
               <div className="flex-1 h-px bg-gradient-to-r from-transparent to-[#B8860B]/50" />
               <div className="w-1 h-1 rounded-full bg-[#B8860B]" />
@@ -74,6 +83,7 @@ export const Login: React.FC = () => {
                 className="input-field"
                 placeholder="Enter username"
                 required
+                disabled={loginMutation.isPending}
               />
             </div>
             
@@ -86,14 +96,23 @@ export const Login: React.FC = () => {
                 className="input-field"
                 placeholder="Enter password"
                 required
+                disabled={loginMutation.isPending}
               />
             </div>
 
             <button
               type="submit"
-              className="w-full btn-primary py-3 text-lg font-bold tracking-wide mt-4"
+              disabled={loginMutation.isPending}
+              className="w-full btn-primary py-3 text-lg font-bold tracking-wide mt-4 flex items-center justify-center gap-2"
             >
-              Sign In
+              {loginMutation.isPending ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Signing In...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </button>
           </form>
           
@@ -105,3 +124,4 @@ export const Login: React.FC = () => {
     </div>
   );
 };
+

@@ -6,7 +6,7 @@ import { Sidebar, MobileMenuButton } from './Sidebar';
 const SIDEBAR_KEY = 'swarna-sidebar-collapsed';
 
 export const Layout: React.FC = () => {
-  const { isAuthenticated, seedData } = useStore();
+  const { isAuthenticated } = useStore();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     return localStorage.getItem(SIDEBAR_KEY) === 'true';
@@ -18,8 +18,6 @@ export const Layout: React.FC = () => {
     setIsCollapsed(next);
     localStorage.setItem(SIDEBAR_KEY, String(next));
   };
-
-  useEffect(() => { seedData(); }, [seedData]);
 
   // Close mobile sidebar on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
