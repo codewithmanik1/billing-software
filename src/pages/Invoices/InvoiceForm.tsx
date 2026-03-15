@@ -195,6 +195,9 @@ export const InvoiceForm: React.FC = () => {
                 <img
                   src={mjLogo}
                   alt="More Jewellers"
+                  onError={(e) => {
+                    e.currentTarget.src = '/mj_logo.png';
+                  }}
                   className="relative w-20 h-20 rounded-2xl object-contain bg-white p-2 shadow-inner border border-gray-100"
                 />
               </div>

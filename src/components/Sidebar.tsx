@@ -65,6 +65,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
             <img
               src={mjLogo}
               alt="MJ"
+              onError={(e) => {
+                e.currentTarget.src = '/mj_logo.png';
+              }}
               className="w-9 h-9 rounded-md object-contain"
               style={{ background: '#FBF0E4', padding: '2px' }}
             />
@@ -85,7 +88,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
         <div className="flex items-center gap-3 px-3 py-5 border-b border-[#2E2E2E] overflow-hidden">
           <img
             src={mjLogo}
-            alt="More Jwellers Logo"
+            alt="More Jewellers Logo"
+            onError={(e) => {
+              e.currentTarget.src = '/mj_logo.png';
+            }}
             className="w-10 h-10 rounded-lg object-contain flex-shrink-0"
             style={{ background: '#FBF0E4', padding: '2px' }}
           />

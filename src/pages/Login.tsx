@@ -49,7 +49,10 @@ export const Login: React.FC = () => {
               <div className="absolute inset-0 rounded-2xl bg-[#B8860B]/20 blur-md scale-110" />
               <img
                 src={mjLogo}
-                alt="More Jwellers"
+                alt="More Jewellers"
+                onError={(e) => {
+                  e.currentTarget.src = '/mj_logo.png';
+                }}
                 className="relative w-24 h-24 rounded-2xl object-contain shadow-2xl"
                 style={{
                   background: '#FBF0E4',
@@ -60,7 +63,7 @@ export const Login: React.FC = () => {
             </div>
 
             <h1 className="text-[#B8860B] text-2xl font-bold uppercase text-center">
-              More Jwellers
+              More Jewellers
             </h1>
             <p className="text-gray-500 text-xs uppercase mt-1 text-center font-medium">
               Billing Management System
