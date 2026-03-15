@@ -66,7 +66,7 @@ export const InvoiceForm: React.FC = () => {
   const existingInvoice = existingInvoiceRes?.data;
   const customers = customersRes?.data?.customers || [];
 
-  const { register, handleSubmit, control, watch, setValue, reset, formState: { errors, isValid } } = useForm<InvoiceFormData>({
+  const { register, handleSubmit, control, watch, setValue, reset } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       customerId: '',
