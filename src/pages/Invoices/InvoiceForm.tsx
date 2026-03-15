@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Plus, Trash2, ArrowLeft, Save, Loader2, User, Search, Calculator } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Combobox } from '@headlessui/react';
 import { format } from 'date-fns';
@@ -66,7 +66,7 @@ export const InvoiceForm: React.FC = () => {
   const existingInvoice = existingInvoiceRes?.data;
   const customers = customersRes?.data?.customers || [];
 
-  const { register, control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<InvoiceFormData>({
+  const { register, handleSubmit, control, watch, setValue, formState: { isValid } } = useForm<InvoiceFormData>({
     resolver: zodResolver(invoiceSchema),
     defaultValues: {
       customerId: '',
