@@ -110,7 +110,7 @@ export const InvoiceForm: React.FC = () => {
 
   const watchItems = watch('items') || [];
   const watchDiscount = watch('discount') || 0;
-  const watchGstPercent = watch('gstPercent') || 3;
+  const watchGstPercent = watch('gstPercent') ?? 3;
   const watchDate = watch('invoiceDate');
 
   // Real-time calculation
