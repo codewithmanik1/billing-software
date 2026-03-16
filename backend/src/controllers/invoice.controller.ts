@@ -208,7 +208,7 @@ export const createInvoice = async (req: Request, res: Response) => {
 
 export const updateInvoice = async (req: Request, res: Response) => {
   const id = req.params.id as string;
-  const { items, gstPercent, additionalDiscount, ...rest } = req.body;
+  const { customerId, invoiceDate, dueDate, items, gstPercent, additionalDiscount, discount, notes, terms } = req.body;
 
   try {
     const existingInvoice = await prisma.invoice.findUnique({
@@ -239,7 +239,7 @@ export const updateInvoice = async (req: Request, res: Response) => {
       };
     });
 
-    const effectiveDiscount = Number(additionalDiscount || rest.discount || 0);
+    const effectiveDiscount = Number(additionalDiscount || discount || 0);
     const gstAmount = (subtotal - effectiveDiscount) * (Number(gstPercent) / 100);
     const grandTotal = subtotal - effectiveDiscount + gstAmount;
 
@@ -256,9 +256,11 @@ export const updateInvoice = async (req: Request, res: Response) => {
       return tx.invoice.update({
         where: { id },
         data: {
-          ...rest,
-          invoiceDate: rest.invoiceDate ? new Date(rest.invoiceDate) : undefined,
-          dueDate: rest.dueDate ? new Date(rest.dueDate) : undefined,
+          customerId,
+          invoiceDate: invoiceDate ? new Date(invoiceDate) : undefined,
+          dueDate: dueDate ? new Date(dueDate) : undefined,
+          notes: notes || null,
+          terms: terms || null,
           subtotal,
           gstPercent: Number(gstPercent),
           gstAmount,

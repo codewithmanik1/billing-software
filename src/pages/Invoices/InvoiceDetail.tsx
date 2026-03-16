@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
@@ -11,6 +11,29 @@ import * as z from 'zod';
 import { toast } from 'sonner';
 import { Pagination } from '../../components/ui/Pagination';
 import mjLogo from '../../assets/mj_logo.png';
+import { useProfile } from '../../context/ProfileContext';
+
+// Convert image to base64 for reliable print rendering
+const getBase64Logo = (): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } else {
+        resolve(mjLogo);
+      }
+    };
+    img.onerror = () => resolve(mjLogo);
+    img.src = mjLogo;
+  });
+};
 
 const paymentSchema = z.object({
   paymentDate: z.string(),
@@ -34,6 +57,13 @@ export const InvoiceDetail: React.FC = () => {
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [payPage, setPayPage] = useState(1);
   const [payPerPage, setPayPerPage] = useState(5);
+  const { profile } = useProfile();
+  const [base64Logo, setBase64Logo] = useState<string>(mjLogo);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getBase64Logo().then(setBase64Logo);
+  }, []);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
@@ -151,7 +181,21 @@ export const InvoiceDetail: React.FC = () => {
   );
 
   const handlePrint = () => {
-    window.print();
+    const images = printRef.current?.querySelectorAll('img') || [];
+    const imagePromises = Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+      });
+    });
+    Promise.all(imagePromises).then(() => {
+      // Temporarily clear title to remove browser header text
+      const originalTitle = document.title;
+      document.title = ' ';
+      window.print();
+      document.title = originalTitle;
+    });
   };
 
   return (
@@ -205,23 +249,23 @@ export const InvoiceDetail: React.FC = () => {
       </div>
 
       {currentTab === 'details' ? (
-        <div id="printable-invoice" className="card p-10 print:shadow-none print:border-none print:p-0 bg-white text-gray-900 border-gray-100 shadow-xl rounded-2xl">
+        <div id="printable-invoice" ref={printRef} className="card p-10 print:shadow-none print:border-none print:p-0 bg-white text-gray-900 border-gray-100 shadow-xl rounded-2xl">
           {/* Printable Invoice Header */}
           <div className="flex justify-between items-start mb-10 pb-8 border-b-2 border-[#B8860B]">
             <div className="flex items-center gap-6">
               <img
-                src={mjLogo}
-                alt="More Jewellers"
+                src={base64Logo}
+                alt={profile.name}
                 onError={(e) => {
                   e.currentTarget.src = '/mj_logo.png';
                 }}
                 className="w-20 h-20 rounded-2xl object-contain bg-[#FBF0E4] p-1 border border-[#B8860B]/30"
               />
               <div>
-                <h2 className="text-2xl font-bold text-[#1A1209]">More Jewellers</h2>
+                <h2 className="text-2xl font-bold text-[#1A1209]">{profile.name}</h2>
                 <div className="mt-2 space-y-1">
-                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Main Road, Mehkar - 585416, Tq. Bhalki, Dist. Bidar, Karnataka</p>
-                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Mob: 6281 218 824 &nbsp;|&nbsp; Email: morejewellers45@gmail.com</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">{profile.address}</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Mob: {profile.phone} &nbsp;|&nbsp; Email: {profile.email}</p>
                 </div>
               </div>
             </div>
@@ -246,7 +290,6 @@ export const InvoiceDetail: React.FC = () => {
                <p className="font-bold text-xl text-[#1A1209]">{customer.name}</p>
                <div className="mt-3 space-y-1.5">
                   <p className="text-gray-600 text-sm flex items-center gap-2">📱 {customer.phone}</p>
-                  {customer.email && <p className="text-gray-600 text-sm flex items-center gap-2">✉️ {customer.email}</p>}
                   {customer.address && <p className="text-gray-500 text-xs leading-relaxed mt-2 italic">{customer.address}</p>}
                </div>
             </div>
@@ -330,7 +373,7 @@ export const InvoiceDetail: React.FC = () => {
                   <h3 className="text-[10px] font-bold text-[#B8860B] mb-2 uppercase tracking-widest">Terms of Service</h3>
                   <ul className="text-[9px] text-gray-500 list-disc pl-4 space-y-1 font-medium">
                      <li>Goods once sold will not be taken back without proper valuation.</li>
-                     <li>Standard purity certifications are guaranteed by More Jewellers.</li>
+                     <li>Standard purity certifications are guaranteed by {profile.name}.</li>
                      <li>Disputes are subject to City Jurisdiction only.</li>
                      <li>This is a computer generated invoice and requires no physical seal.</li>
                   </ul>
@@ -342,7 +385,7 @@ export const InvoiceDetail: React.FC = () => {
                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#1A1209]">Digitally Authenticated By</p>
                 </div>
                 <div className="font-bold text-xl text-[#1A1209] mb-4 uppercase border-b-2 border-gray-200 pb-1">
-                  More Jewellers
+                  {profile.name}
                 </div>
                 <div className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Authorized Signature</div>
             </div>

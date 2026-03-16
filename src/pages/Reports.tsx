@@ -62,11 +62,11 @@ export const Reports: React.FC = () => {
     },
   });
 
-  // Fetching Outstanding Invoices for the period
+  // Fetching Outstanding Invoices (UNPAID + PARTIAL)
   const { data: outstandingRes, isLoading: isLoadingOutstanding } = useQuery({
-    queryKey: ['reports-outstanding', appliedStart, appliedEnd, currentPage, itemsPerPage],
+    queryKey: ['reports-outstanding', currentPage, itemsPerPage],
     queryFn: async () => {
-      const res = await api.get(`/invoices?status=unpaid&fromDate=${appliedStart}&toDate=${appliedEnd}&page=${currentPage}&limit=${itemsPerPage}`);
+      const res = await api.get(`/reports/outstanding?page=${currentPage}&limit=${itemsPerPage}`);
       return res.data;
     },
   });
@@ -119,8 +119,8 @@ export const Reports: React.FC = () => {
       </div>
 
       {/* Control Panel */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 card p-6 rounded-2xl shadow-md space-y-4 border-l-4 border-[#B8860B]">
+      <div className="grid grid-cols-1 gap-6">
+        <div className="card p-6 rounded-2xl shadow-md space-y-4 border-l-4 border-[#B8860B]">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-3 bg-white dark:bg-dark-900 border border-gray-100 dark:border-dark-800 rounded-xl px-4 py-2 shadow-sm">
               <Calendar size={16} className="text-[#B8860B]" />
@@ -162,10 +162,6 @@ export const Reports: React.FC = () => {
             ))}
           </div>
         </div>
-        
-        <div className="card p-6 rounded-2xl bg-[#1A1209] text-white">
-           <p className="text-xs text-gray-400 font-medium leading-relaxed">Financial summaries are generated based on the recorded invoice transactions in the database.</p>
-        </div>
       </div>
 
       {/* KPI Cards */}
@@ -196,7 +192,7 @@ export const Reports: React.FC = () => {
             {formatCurrency(summary.totalAmountPending).replace('₹', '')}
           </div>
           <p className="mt-4 text-[10px] font-bold uppercase text-red-500/80">
-            ACTION REQUIRED ON {totalOutstanding} ENTRIES
+            ACTION REQUIRED ON {summary.pendingInvoiceCount || totalOutstanding} ENTRIES
           </p>
         </div>
       </div>
@@ -222,7 +218,7 @@ export const Reports: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-dark-800">
-                {outstandingInvoices.map((inv: Record<string, unknown> & { id: string; invoiceNumber: string; invoiceDate: string; customer: { name: string; phone: string }; totalAmount: number; pendingAmount: number }) => (
+                {outstandingInvoices.map((inv: Record<string, unknown> & { id: string; invoiceNumber: string; invoiceDate: string; customer: { name: string; phone: string }; grandTotal: number; pendingBalance: number }) => (
                   <tr key={inv.id} className="bg-white dark:bg-dark-900 hover:bg-[#FFF8E7]/50 dark:hover:bg-dark-800 transition-colors group">
                     <td className="px-8 py-4">
                       <Link to={`/invoices/${inv.id}`} className="text-[#B8860B] font-mono font-bold hover:underline">
@@ -236,10 +232,10 @@ export const Reports: React.FC = () => {
                           <span className="text-[10px] text-gray-400 font-mono tracking-tighter">{inv.customer.phone}</span>
                        </div>
                     </td>
-                    <td className="px-6 py-4 text-right text-[#1A1209] dark:text-[#F5F5F0] font-mono font-medium">{formatCurrency(inv.totalAmount)}</td>
+                    <td className="px-6 py-4 text-right text-[#1A1209] dark:text-[#F5F5F0] font-mono font-medium">{formatCurrency(Number(inv.grandTotal))}</td>
                     <td className="px-8 py-4 text-right">
                        <span className="text-red-600 dark:text-red-400 font-mono font-bold text-lg">
-                          {formatCurrency(inv.pendingAmount)}
+                          {formatCurrency(inv.pendingBalance)}
                        </span>
                     </td>
                   </tr>

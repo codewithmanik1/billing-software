@@ -5,3 +5,4 @@ export * from './Reports';
 export * from './Invoices/InvoiceList';
 export * from './Invoices/InvoiceForm';
 export * from './Invoices/InvoiceDetail';
+export * from './Profile';
