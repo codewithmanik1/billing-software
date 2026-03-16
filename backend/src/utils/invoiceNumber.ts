@@ -1,6 +1,4 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import prisma from './prisma';
 
 export const generateNextInvoiceNumber = async (): Promise<string> => {
   const currentYear = new Date().getFullYear();

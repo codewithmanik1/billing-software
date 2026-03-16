@@ -1,15 +1,32 @@
 import { Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { z } from 'zod';
+import prisma from '../utils/prisma';
 import { successResponse, errorResponse } from '../utils/apiResponse';
 
-const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is not set');
+  }
+  return secret;
+};
+
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
+const loginSchema = z.object({
+  username: z.string().min(1, 'Username is required'),
+  password: z.string().min(1, 'Password is required'),
+});
+
 export const login = async (req: Request, res: Response) => {
-  const { username, password } = req.body;
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(errorResponse('Invalid credentials', parsed.error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))));
+  }
+
+  const { username, password } = parsed.data;
 
   try {
     const user = await prisma.user.findUnique({
@@ -27,8 +44,8 @@ export const login = async (req: Request, res: Response) => {
 
     const token = jwt.sign(
       { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN as any }
+      getJwtSecret(),
+      { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions
     );
 
     return res.json(
@@ -42,11 +59,12 @@ export const login = async (req: Request, res: Response) => {
         },
       })
     );
-  } catch (error: any) {
-    return res.status(500).json(errorResponse(error.message));
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json(errorResponse('Internal server error'));
   }
 };
 
-export const getMe = async (req: any, res: Response) => {
-  return res.json(successResponse(req.user));
+export const getMe = async (req: Request, res: Response) => {
+  return res.json(successResponse((req as unknown as { user: unknown }).user));
 };

@@ -20,7 +20,11 @@ export const Layout: React.FC = () => {
   };
 
   // Close mobile sidebar on route change
-  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+  const pathname = location.pathname;
+  useEffect(() => {
+    if (mobileOpen) setMobileOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   if (!isAuthenticated && location.pathname !== '/login') {
     return <Navigate to="/login" replace />;

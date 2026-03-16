@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Combobox } from '@headlessui/react';
 import { format } from 'date-fns';
 import mjLogo from '../../assets/mj_logo.png';
+import { useProfile } from '../../context/ProfileContext';
 
 const invoiceItemSchema = z.object({
   id: z.string().optional(),
@@ -43,6 +44,7 @@ export const InvoiceForm: React.FC = () => {
   const isEditing = Boolean(id);
   
   const [customerQuery, setCustomerQuery] = useState('');
+  const { profile } = useProfile();
 
   // Fetching data
   const { data: customersRes } = useQuery({
@@ -84,14 +86,17 @@ export const InvoiceForm: React.FC = () => {
       reset({
         customerId: existingInvoice.customerId,
         invoiceDate: format(new Date(existingInvoice.invoiceDate), 'yyyy-MM-dd'),
-        items: existingInvoice.items.map((item: any) => ({
+        items: existingInvoice.items.map((item: Record<string, unknown>) => ({
+          id: item.id as string,
+          description: (item.description as string) || '',
+          metalType: (item.metalType as string) || '22K',
           weightGrams: Number(item.weightGrams) || 0,
           ratePerGram: Number(item.ratePerGram) || 0,
           makingCharges: Number(item.makingCharges) || 0,
           discount: Number(item.discount || 0),
           lineTotal: Number(item.lineTotal || item.amount || 0)
         })),
-        discount: Number(existingInvoice.discount),
+        discount: Number(existingInvoice.additionalDiscount || existingInvoice.discount || 0),
         gstPercent: Number(existingInvoice.gstPercent),
         notes: existingInvoice.notes || ''
       });
@@ -122,7 +127,8 @@ export const InvoiceForm: React.FC = () => {
         setValue(`items.${index}.lineTotal`, lineTotal, { shouldValidate: true });
       }
     });
-  }, [JSON.stringify(watchItems), setValue]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchItems.map(i => `${i?.weightGrams}-${i?.ratePerGram}-${i?.makingCharges}-${i?.discount}`).join(','), setValue]);
 
   const subtotal = watchItems.reduce((sum, item) => sum + (Number(item?.lineTotal) || 0), 0);
   const amountAfterDiscount = Math.max(0, subtotal - Number(watchDiscount));
@@ -138,7 +144,7 @@ export const InvoiceForm: React.FC = () => {
       toast.success('Invoice generated successfully');
       navigate('/invoices');
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to create invoice'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to create invoice'),
   });
 
   const updateMutation = useMutation({
@@ -149,7 +155,7 @@ export const InvoiceForm: React.FC = () => {
       toast.success('Invoice updated successfully');
       navigate(`/invoices/${id}`);
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update invoice'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to update invoice'),
   });
 
   const onSubmit = (data: InvoiceFormData) => {
@@ -161,7 +167,7 @@ export const InvoiceForm: React.FC = () => {
   };
 
   const selectedCustomerId = watch('customerId');
-  const selectedCustomerObj = customers.find((c: any) => c.id === selectedCustomerId) || existingInvoice?.customer;
+  const selectedCustomerObj = customers.find((c: Record<string, unknown>) => c.id === selectedCustomerId) || existingInvoice?.customer;
   const formattedDateForHeader = watchDate ? format(new Date(watchDate), 'dd MMM yyyy') : '';
 
   if (isEditing && isLoadingInvoice) {
@@ -186,7 +192,7 @@ export const InvoiceForm: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Invoice Letterhead Preview Section */}
         <div className="card p-8 bg-white dark:bg-[#1A1A1A] shadow-xl rounded-2xl flex justify-between items-center border border-gray-100 dark:border-dark-800">
            <div className="flex items-center gap-6">
@@ -202,11 +208,11 @@ export const InvoiceForm: React.FC = () => {
                 />
               </div>
               <div className="space-y-1">
-                <h2 className="text-[#B8860B] text-2xl font-bold uppercase tracking-tight">More Jewellers</h2>
+                <h2 className="text-[#B8860B] text-2xl font-bold uppercase tracking-tight">{profile.name}</h2>
                 <div className="text-[10px] space-y-0.5">
-                   <p className="text-gray-500 uppercase font-bold tracking-widest">Premium Gold & Silver Jewellery</p>
-                   <p className="text-gray-400 font-medium">Mob: 6281 218 824 &nbsp;|&nbsp; morejewellers45@gmail.com</p>
-                   <p className="text-gray-400 font-medium">Main Road, Mehkar - 585416, Tq. Bhalki, Dist. Bidar, Karnataka</p>
+                   <p className="text-gray-500 uppercase font-bold tracking-widest">{profile.tagline}</p>
+                   <p className="text-gray-400 font-medium">Mob: {profile.phone} &nbsp;|&nbsp; {profile.email}</p>
+                   <p className="text-gray-400 font-medium">{profile.address}</p>
                 </div>
               </div>
            </div>
@@ -236,13 +242,13 @@ export const InvoiceForm: React.FC = () => {
                         <div className="relative">
                           <Combobox.Input
                             className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none transition-all"
-                            displayValue={(id: string) => customers.find((c: any) => c.id === id)?.name || existingInvoice?.customer.name || ''}
+                            displayValue={(id: string) => customers.find((c: Record<string, unknown>) => c.id === id)?.name as string || existingInvoice?.customer.name || ''}
                             onChange={(event) => setCustomerQuery(event.target.value)}
                             placeholder="Rajesh Sharma"
                           />
                           <Combobox.Options className="absolute z-20 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 py-1 text-base shadow-2xl">
                             {/* ... same customers map ... */}
-                            {customers.map((customer: any) => (
+                            {customers.map((customer: Record<string, string>) => (
                                 <Combobox.Option key={customer.id} className={({ active }) => `relative cursor-pointer select-none py-3 pl-4 pr-4 ${active ? 'bg-[#B8860B]/10 text-[#B8860B]' : 'text-gray-700 animate-in fade-in transition-all'}`} value={customer.id}>
                                   <div className="font-bold">{customer.name}</div>
                                 </Combobox.Option>
@@ -257,8 +263,7 @@ export const InvoiceForm: React.FC = () => {
                {selectedCustomerObj ? (
                  <div className="bg-gray-50 dark:bg-dark-900 p-6 rounded-2xl space-y-2 border border-blue-50/50">
                     <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Phone: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.phone}</span></p>
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Email: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.email || 'rajesh@example.com'}</span></p>
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Address: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.address || '12 MG Road, Bangalore'}</span></p>
+                    {selectedCustomerObj.address && <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Address: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.address}</span></p>}
                  </div>
                ) : (
                  <div className="h-28 bg-gray-50 dark:bg-dark-900 rounded-2xl flex items-center justify-center border border-dashed border-gray-200">
@@ -300,29 +305,29 @@ export const InvoiceForm: React.FC = () => {
             <table className="w-full text-left text-sm">
               <thead className="bg-gray-50 dark:bg-dark-900 border-b border-gray-100 dark:border-dark-800">
                 <tr>
-                  <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px]">Item Name</th>
-                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center">Purity</th>
-                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Weight (g)</th>
-                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Rate/g (₹)</th>
-                  <th className="px-4 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Making Chg (₹)</th>
-                  <th className="px-6 py-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right">Amount (₹)</th>
-                  <th className="px-4 py-4 text-center"></th>
+                  <th className="py-4 pl-6 pr-2 font-bold text-gray-500 uppercase tracking-widest text-[10px]" style={{ width: '40%' }}>Item Name</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '7%' }}>Purity</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '11%' }}>Weight (g)</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '11%' }}>Rate/g (₹)</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '11%' }}>Making (₹)</th>
+                  <th className="py-4 pl-1 pr-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right" style={{ width: '13%' }}>Amount (₹)</th>
+                  <th className="py-4 px-1 text-center" style={{ width: '7%' }}></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-dark-800">
                 {fields.map((field, index) => (
                   <tr key={field.id} className="bg-white dark:bg-dark-900 transition-colors">
-                    <td className="px-6 py-4">
-                      <input 
-                        {...register(`items.${index}.description`)} 
+                    <td className="pl-6 pr-2 py-4">
+                      <input
+                        {...register(`items.${index}.description`)}
                         className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                         placeholder="18K Gold Earrings"
                       />
                     </td>
-                    <td className="px-4 py-4">
-                      <select 
-                        {...register(`items.${index}.metalType`)} 
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-2 py-2 text-gray-900 dark:text-white font-bold text-center appearance-none focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                    <td className="px-1 py-4">
+                      <select
+                        {...register(`items.${index}.metalType`)}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-0 py-2 text-gray-900 dark:text-white font-bold text-center appearance-none focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       >
                         <option value="24K">24K</option>
                         <option value="22K">22K</option>
@@ -330,35 +335,35 @@ export const InvoiceForm: React.FC = () => {
                         <option value="14K">14K</option>
                       </select>
                     </td>
-                    <td className="px-4 py-4">
-                      <input 
+                    <td className="px-1 py-4">
+                      <input
                         type="number" step="0.001"
-                        {...register(`items.${index}.weightGrams`, { valueAsNumber: true })} 
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        {...register(`items.${index}.weightGrams`, { valueAsNumber: true })}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       />
                     </td>
-                    <td className="px-4 py-4">
-                      <input 
+                    <td className="px-1 py-4">
+                      <input
                         type="number" step="1"
-                        {...register(`items.${index}.ratePerGram`, { valueAsNumber: true })} 
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        {...register(`items.${index}.ratePerGram`, { valueAsNumber: true })}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       />
                     </td>
-                    <td className="px-4 py-4">
-                      <input 
+                    <td className="px-1 py-4">
+                      <input
                         type="number" step="1"
-                        {...register(`items.${index}.makingCharges`, { valueAsNumber: true })} 
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        {...register(`items.${index}.makingCharges`, { valueAsNumber: true })}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       />
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="pl-1 pr-4 py-4 text-right">
                        <span className="text-gray-900 dark:text-white font-black text-sm font-mono tracking-tighter">
                           {formatCurrency(watchItems[index]?.lineTotal || 0)}
                        </span>
                     </td>
-                    <td className="px-4 py-4 text-center">
-                      <button 
-                        type="button" 
+                    <td className="px-1 py-4 text-center">
+                      <button
+                        type="button"
                         onClick={() => remove(index)}
                         disabled={fields.length === 1}
                         className="p-1.5 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50 disabled:opacity-0"

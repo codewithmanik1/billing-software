@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
@@ -11,6 +11,29 @@ import * as z from 'zod';
 import { toast } from 'sonner';
 import { Pagination } from '../../components/ui/Pagination';
 import mjLogo from '../../assets/mj_logo.png';
+import { useProfile } from '../../context/ProfileContext';
+
+// Convert image to base64 for reliable print rendering
+const getBase64Logo = (): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } else {
+        resolve(mjLogo);
+      }
+    };
+    img.onerror = () => resolve(mjLogo);
+    img.src = mjLogo;
+  });
+};
 
 const paymentSchema = z.object({
   paymentDate: z.string(),
@@ -30,8 +53,17 @@ export const InvoiceDetail: React.FC = () => {
   const currentTab = searchParams.get('tab') || 'details';
   
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isDeletePaymentOpen, setIsDeletePaymentOpen] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [payPage, setPayPage] = useState(1);
   const [payPerPage, setPayPerPage] = useState(5);
+  const { profile } = useProfile();
+  const [base64Logo, setBase64Logo] = useState<string>(mjLogo);
+  const printRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    getBase64Logo().then(setBase64Logo);
+  }, []);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
@@ -70,7 +102,7 @@ export const InvoiceDetail: React.FC = () => {
       setIsPaymentModalOpen(false);
       reset();
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to record payment'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to record payment'),
   });
 
   const deletePaymentMutation = useMutation({
@@ -80,7 +112,7 @@ export const InvoiceDetail: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Payment record removed');
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete payment'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to delete payment'),
   });
 
   if (isLoading) {
@@ -124,18 +156,24 @@ export const InvoiceDetail: React.FC = () => {
     addPaymentMutation.mutate(data);
   };
 
-  const handleDeletePayment = (paymentId: string) => {
-    deletePaymentMutation.mutate(paymentId);
+  const handleDeletePayment = () => {
+    if (deletingPaymentId) {
+      deletePaymentMutation.mutate(deletingPaymentId);
+      setIsDeletePaymentOpen(false);
+      setDeletingPaymentId(null);
+    }
   };
 
   // Compute running balance for the payments table
-  let runningBalance = Number(invoice.grandTotal);
   const sortedPayments = [...invoicePayments].sort((a, b) => new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime());
-  
-  const paymentsWithBalance = sortedPayments.map(p => {
-    runningBalance -= Number(p.amount);
-    return { ...p, balanceAfter: runningBalance };
-  }).reverse();
+
+  const paymentsWithBalance = (() => {
+    let balance = Number(invoice.grandTotal);
+    return sortedPayments.map(p => {
+      balance -= Number(p.amount);
+      return { ...p, balanceAfter: balance };
+    }).reverse();
+  })();
 
   const paginatedPayments = paymentsWithBalance.slice(
     (payPage - 1) * payPerPage,
@@ -143,7 +181,21 @@ export const InvoiceDetail: React.FC = () => {
   );
 
   const handlePrint = () => {
-    window.print();
+    const images = printRef.current?.querySelectorAll('img') || [];
+    const imagePromises = Array.from(images).map(img => {
+      if (img.complete) return Promise.resolve();
+      return new Promise<void>((resolve) => {
+        img.onload = () => resolve();
+        img.onerror = () => resolve();
+      });
+    });
+    Promise.all(imagePromises).then(() => {
+      // Temporarily clear title to remove browser header text
+      const originalTitle = document.title;
+      document.title = ' ';
+      window.print();
+      document.title = originalTitle;
+    });
   };
 
   return (
@@ -197,23 +249,23 @@ export const InvoiceDetail: React.FC = () => {
       </div>
 
       {currentTab === 'details' ? (
-        <div id="printable-invoice" className="card p-10 print:shadow-none print:border-none print:p-0 bg-white text-gray-900 border-gray-100 shadow-xl rounded-2xl">
+        <div id="printable-invoice" ref={printRef} className="card p-10 print:shadow-none print:border-none print:p-0 bg-white text-gray-900 border-gray-100 shadow-xl rounded-2xl">
           {/* Printable Invoice Header */}
           <div className="flex justify-between items-start mb-10 pb-8 border-b-2 border-[#B8860B]">
             <div className="flex items-center gap-6">
               <img
-                src={mjLogo}
-                alt="More Jewellers"
+                src={base64Logo}
+                alt={profile.name}
                 onError={(e) => {
                   e.currentTarget.src = '/mj_logo.png';
                 }}
                 className="w-20 h-20 rounded-2xl object-contain bg-[#FBF0E4] p-1 border border-[#B8860B]/30"
               />
               <div>
-                <h2 className="text-2xl font-bold text-[#1A1209]">More Jewellers</h2>
+                <h2 className="text-2xl font-bold text-[#1A1209]">{profile.name}</h2>
                 <div className="mt-2 space-y-1">
-                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Main Road, Mehkar - 585416, Tq. Bhalki, Dist. Bidar, Karnataka</p>
-                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Mob: 6281 218 824 &nbsp;|&nbsp; Email: morejewellers45@gmail.com</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">{profile.address}</p>
+                   <p className="text-[#6B5E4A] text-xs font-medium font-sans">Mob: {profile.phone} &nbsp;|&nbsp; Email: {profile.email}</p>
                 </div>
               </div>
             </div>
@@ -238,7 +290,6 @@ export const InvoiceDetail: React.FC = () => {
                <p className="font-bold text-xl text-[#1A1209]">{customer.name}</p>
                <div className="mt-3 space-y-1.5">
                   <p className="text-gray-600 text-sm flex items-center gap-2">📱 {customer.phone}</p>
-                  {customer.email && <p className="text-gray-600 text-sm flex items-center gap-2">✉️ {customer.email}</p>}
                   {customer.address && <p className="text-gray-500 text-xs leading-relaxed mt-2 italic">{customer.address}</p>}
                </div>
             </div>
@@ -262,13 +313,13 @@ export const InvoiceDetail: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {items.map((item: any, idx: number) => (
-                  <tr key={item.id || idx} className="text-gray-800 hover:bg-gray-50/50 transition-colors">
+                {items.map((item: Record<string, unknown>, idx: number) => (
+                  <tr key={(item.id as string) || idx} className="text-gray-800 hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-5">
-                       <div className="font-bold text-gray-900">{item.description}</div>
+                       <div className="font-bold text-gray-900">{item.description as string}</div>
                     </td>
-                    <td className="px-4 py-3 text-center font-medium">{item.metalType}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">{item.weightGrams}g</td>
+                    <td className="px-4 py-3 text-center font-medium">{item.metalType as string}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">{item.weightGrams as string}g</td>
                     <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(Number(item.ratePerGram))}</td>
                     <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(Number(item.makingCharges || 0))}</td>
                     <td className="px-6 py-3 text-right font-bold text-gray-900">{formatCurrency(Number(item.lineTotal || item.amount || 0))}</td>
@@ -322,7 +373,7 @@ export const InvoiceDetail: React.FC = () => {
                   <h3 className="text-[10px] font-bold text-[#B8860B] mb-2 uppercase tracking-widest">Terms of Service</h3>
                   <ul className="text-[9px] text-gray-500 list-disc pl-4 space-y-1 font-medium">
                      <li>Goods once sold will not be taken back without proper valuation.</li>
-                     <li>Standard purity certifications are guaranteed by More Jewellers.</li>
+                     <li>Standard purity certifications are guaranteed by {profile.name}.</li>
                      <li>Disputes are subject to City Jurisdiction only.</li>
                      <li>This is a computer generated invoice and requires no physical seal.</li>
                   </ul>
@@ -334,7 +385,7 @@ export const InvoiceDetail: React.FC = () => {
                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#1A1209]">Digitally Authenticated By</p>
                 </div>
                 <div className="font-bold text-xl text-[#1A1209] mb-4 uppercase border-b-2 border-gray-200 pb-1">
-                  More Jewellers
+                  {profile.name}
                 </div>
                 <div className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">Authorized Signature</div>
             </div>
@@ -387,14 +438,14 @@ export const InvoiceDetail: React.FC = () => {
                       <td className="px-6 py-5 text-right font-medium text-gray-400 font-mono">{formatCurrency(p.balanceAfter)}</td>
                       <td className="px-8 py-5">
                         <div className="flex justify-center group-hover:opacity-100 opacity-60 transition-opacity">
-                          <button 
+                          <button
                             onClick={() => {
-                               if (confirm('Delete this payment record? This will increase the pending balance.')) {
-                                  handleDeletePayment(p.id);
-                               }
+                              setDeletingPaymentId(p.id);
+                              setIsDeletePaymentOpen(true);
                             }}
                             className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
                             title="Delete Payment"
+                            aria-label="Delete Payment"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -433,6 +484,32 @@ export const InvoiceDetail: React.FC = () => {
           )}
          </div>
       )}
+
+      {/* Delete Payment Confirmation Modal */}
+      <Modal isOpen={isDeletePaymentOpen} onClose={() => setIsDeletePaymentOpen(false)} title="Delete Payment">
+        <div className="space-y-6 pt-2">
+          <div className="flex items-start gap-4 p-4 bg-red-50 dark:bg-red-500/5 rounded-xl border border-red-100 dark:border-red-500/10">
+            <div className="p-2 bg-red-500 rounded-lg text-white">
+              <Trash2 size={24} />
+            </div>
+            <div>
+              <p className="font-bold text-red-600 dark:text-red-400">Delete this payment record?</p>
+              <p className="text-sm text-red-600/70 dark:text-red-400/70 mt-1">This will increase the pending balance on this invoice.</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-4">
+            <button onClick={() => setIsDeletePaymentOpen(false)} className="px-5 py-2 text-gray-500 hover:text-gray-700 font-bold uppercase tracking-wider text-xs">Cancel</button>
+            <button
+              onClick={handleDeletePayment}
+              disabled={deletePaymentMutation.isPending}
+              className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider text-xs shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all flex items-center gap-2"
+            >
+              {deletePaymentMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Delete Payment
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Payment Modal */}
       <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record Collection">

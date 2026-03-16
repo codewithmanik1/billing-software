@@ -10,6 +10,7 @@ async function main() {
   await prisma.invoice.deleteMany();
   await prisma.customer.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.shopProfile.deleteMany();
 
   // 2. Create Admin User
   const hashedPassword = await bcrypt.hash('admin', 10);
@@ -19,6 +20,17 @@ async function main() {
       passwordHash: hashedPassword,
       name: 'Admin',
       role: 'admin',
+    },
+  });
+
+  // 2b. Create Shop Profile
+  await prisma.shopProfile.create({
+    data: {
+      name: 'More Jewellers',
+      tagline: 'Premium Gold & Silver Jewellery',
+      phone: '6281 218 824',
+      email: 'morejewellers45@gmail.com',
+      address: 'Main Road, Mehkar - 585416, Tq. Bhalki, Dist. Bidar, Karnataka',
     },
   });
 

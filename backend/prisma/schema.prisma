@@ -19,6 +19,20 @@ model User {
   @@map("users")
 }
 
+model ShopProfile {
+  id        String   @id @default(uuid())
+  name      String   @default("More Jewellers")
+  tagline   String   @default("Premium Gold & Silver Jewellery")
+  phone     String   @default("6281 218 824")
+  email     String   @default("morejewellers45@gmail.com")
+  address   String   @default("Main Road, Mehkar - 585416, Tq. Bhalki, Dist. Bidar, Karnataka")
+  gstin     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shop_profiles")
+}
+
 model Customer {
   id        String    @id @default(uuid())
   name      String

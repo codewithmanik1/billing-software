@@ -2,10 +2,10 @@ import React from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, LogOut,
-  PieChart, Sun, Moon, ChevronLeft, ChevronRight, Menu, X
+  PieChart, ChevronLeft, ChevronRight, Menu, X, Building2
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { useTheme } from '../context/ThemeContext';
+import { useProfile } from '../context/ProfileContext';
 
 import mjLogo from '../assets/mj_logo.png';
 
@@ -14,6 +14,7 @@ const navItems = [
   { name: 'Customers', path: '/customers', icon: Users },
   { name: 'Invoices', path: '/invoices', icon: FileText },
   { name: 'Reports', path: '/reports', icon: PieChart },
+  { name: 'Profile', path: '/profile', icon: Building2 },
 ];
 
 interface SidebarProps {
@@ -36,7 +37,7 @@ const NavTooltip: React.FC<{ label: string; visible: boolean; children: React.Re
 
 export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileOpen, onMobileClose }) => {
   const { logout, user } = useStore();
-  const { theme, toggleTheme } = useTheme();
+  const { profile } = useProfile();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -53,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
           onClick={onToggle}
           className="absolute -right-3 top-7 w-6 h-6 rounded-full bg-[#B8860B] text-white flex items-center justify-center shadow-lg cursor-pointer hover:bg-[#FFD700] transition-colors z-50"
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </button>
@@ -81,14 +83,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
             transition-opacity duration-150
             pointer-events-none z-50
           ">
-            More Jewellers
+            {profile.name}
           </span>
         </div>
       ) : (
         <div className="flex items-center gap-3 px-3 py-5 border-b border-[#2E2E2E] overflow-hidden">
           <img
             src={mjLogo}
-            alt="More Jewellers Logo"
+            alt={`${profile.name} Logo`}
             onError={(e) => {
               e.currentTarget.src = '/mj_logo.png';
             }}
@@ -97,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
           />
           <div className="flex flex-col leading-tight min-w-0 flex-1">
             <span className="text-[#FFD700] font-bold text-lg uppercase truncate">
-              More Jewellers
+              {profile.name}
             </span>
             <span className="text-[#9A9A8A] text-xs uppercase truncate">
               Billing System
@@ -148,38 +150,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
             <p className="text-[#9A9A8A] text-xs uppercase tracking-wider mb-0.5">Logged in as</p>
             <p className="text-[#F5F5F0] font-medium text-sm">{user?.username || 'Admin'}</p>
           </div>
-        )}
-
-        {/* Theme toggle */}
-        {(!isCollapsed || isMobile) ? (
-          <button
-            onClick={toggleTheme}
-            className="w-full flex items-center bg-[#1A1A1A] border border-[#2E2E2E] rounded-full p-1 relative hover:border-[#B8860B]/50 transition-all duration-300"
-            title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-          >
-            <span className={`absolute top-1 h-7 w-[calc(50%-4px)] rounded-full bg-[#B8860B]/90 shadow-[0_0_10px_rgba(184,134,11,0.4)] transition-all duration-300 ${
-              theme === 'light' ? 'left-1' : 'left-[calc(50%+3px)]'
-            }`} />
-            <span className={`relative z-10 flex items-center justify-center gap-1.5 w-1/2 py-1 text-xs font-medium rounded-full ${
-              theme === 'light' ? 'text-[#1A1209]' : 'text-[#9A9A8A]'
-            }`}>
-              <Sun size={13} /><span>Day</span>
-            </span>
-            <span className={`relative z-10 flex items-center justify-center gap-1.5 w-1/2 py-1 text-xs font-medium rounded-full ${
-              theme === 'dark' ? 'text-[#F5F5F0]' : 'text-[#9A9A8A]'
-            }`}>
-              <Moon size={13} /><span>Night</span>
-            </span>
-          </button>
-        ) : (
-          <NavTooltip label={theme === 'dark' ? 'Switch to Light' : 'Switch to Dark'} visible>
-            <button
-              onClick={toggleTheme}
-              className="w-full flex items-center justify-center py-2.5 rounded-lg text-[#9A9A8A] hover:bg-[#1F1A0E] hover:text-[#F5F5F0] transition-colors"
-            >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-          </NavTooltip>
         )}
 
         {/* Sign Out */}

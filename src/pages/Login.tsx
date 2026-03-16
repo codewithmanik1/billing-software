@@ -11,7 +11,7 @@ export const Login: React.FC = () => {
   const [password, setPassword] = useState('');
 
   const loginMutation = useMutation({
-    mutationFn: async (credentials: any) => {
+    mutationFn: async (credentials: { username: string; password: string }) => {
       const response = await api.post('/auth/login', credentials);
       return response.data;
     },
@@ -23,7 +23,7 @@ export const Login: React.FC = () => {
         toast.error(res.message || 'Login failed');
       }
     },
-    onError: (err: any) => {
+    onError: (err: { response?: { data?: { message?: string } } }) => {
       toast.error(err.response?.data?.message || 'Invalid username or password');
     },
   });
