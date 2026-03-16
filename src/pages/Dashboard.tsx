@@ -71,17 +71,17 @@ export const Dashboard: React.FC = () => {
           <h1 className="text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">Dashboard</h1>
           <p className="text-sm text-[#6B5E4A] dark:text-[#9A9A8A] mt-1 flex items-center gap-1.5">
             <Calendar size={14} className="text-[#B8860B]" />
-            Real-time analytics from PostgreSQL database
+            Last 7 Days Real-time analytics
           </p>
         </div>
         <div className="hidden sm:block">
-           <button 
-             onClick={() => navigate('/invoices/new')}
-             className="btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl shadow-lg shadow-gold/10"
-           >
-             <FileText size={18} />
-             Create New Invoice
-           </button>
+          <button
+            onClick={() => navigate('/invoices/new')}
+            className="btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl shadow-lg shadow-gold/10"
+          >
+            <FileText size={18} />
+            Create New Invoice
+          </button>
         </div>
       </div>
 
@@ -102,7 +102,7 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="card p-6 lg:col-span-1 flex flex-col">
           <div className="flex justify-between items-center mb-6">
-             <h2 className="text-xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">Sales Distribution</h2>
+            <h2 className="text-xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">Sales Distribution</h2>
           </div>
           <div className="flex justify-between mb-8">
             {[
@@ -122,7 +122,7 @@ export const Dashboard: React.FC = () => {
                 <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} opacity={0.1} />
                 <XAxis dataKey="name" stroke="#6b7280" tick={{ fill: '#6b7280' }} axisLine={false} tickLine={false} />
                 <Tooltip
-                   cursor={{ fill: 'rgba(184, 134, 11, 0.05)' }}
+                  cursor={{ fill: 'rgba(184, 134, 11, 0.05)' }}
                   formatter={(value) => formatCurrency(Number(value))}
                   contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2E2E2E', borderRadius: '12px', color: '#F5F5F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)' }}
                 />
@@ -160,7 +160,7 @@ export const Dashboard: React.FC = () => {
                     <td colSpan={5} className="px-6 py-16 text-center">
                       <div className="flex flex-col items-center justify-center text-[#9A9A8A]">
                         <div className="p-4 bg-gray-100 dark:bg-dark-800 rounded-full mb-4">
-                           <FileText size={32} className="opacity-20" />
+                          <FileText size={32} className="opacity-20" />
                         </div>
                         <p className="text-base font-medium text-[#6B5E4A] dark:text-[#F5F5F0] mb-1">No Recent Invoices</p>
                         <p className="text-sm mb-4">Create your first invoice to see it here.</p>
@@ -188,11 +188,10 @@ export const Dashboard: React.FC = () => {
                       <td className="px-6 py-4.5 text-[#6B5E4A] dark:text-[#9A9A8A]">{format(new Date(inv.invoiceDate), 'dd MMM yyyy')}</td>
                       <td className="px-6 py-4.5 text-right font-bold text-[#1A1209] dark:text-[#F5F5F0]">{formatCurrency(Number(inv.grandTotal))}</td>
                       <td className="px-6 py-4.5 text-center">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider ${
-                          inv.status === 'PAID' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
-                          inv.status === 'PARTIAL' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
-                          'bg-red-500/10 text-red-600 dark:text-red-400'
-                        }`}>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider ${inv.status === 'PAID' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                            inv.status === 'PARTIAL' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
+                              'bg-red-500/10 text-red-600 dark:text-red-400'
+                          }`}>
                           {inv.status}
                         </span>
                       </td>
