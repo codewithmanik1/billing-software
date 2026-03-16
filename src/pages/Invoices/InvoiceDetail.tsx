@@ -314,12 +314,12 @@ export const InvoiceDetail: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {items.map((item: Record<string, unknown>, idx: number) => (
-                  <tr key={item.id || idx} className="text-gray-800 hover:bg-gray-50/50 transition-colors">
+                  <tr key={(item.id as string) || idx} className="text-gray-800 hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-5">
-                       <div className="font-bold text-gray-900">{item.description}</div>
+                       <div className="font-bold text-gray-900">{item.description as string}</div>
                     </td>
-                    <td className="px-4 py-3 text-center font-medium">{item.metalType}</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">{item.weightGrams}g</td>
+                    <td className="px-4 py-3 text-center font-medium">{item.metalType as string}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-gray-900">{item.weightGrams as string}g</td>
                     <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(Number(item.ratePerGram))}</td>
                     <td className="px-4 py-3 text-right text-gray-600">{formatCurrency(Number(item.makingCharges || 0))}</td>
                     <td className="px-6 py-3 text-right font-bold text-gray-900">{formatCurrency(Number(item.lineTotal || item.amount || 0))}</td>

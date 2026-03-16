@@ -91,18 +91,18 @@ export const Customers: React.FC = () => {
   const handleOpenEdit = (customer: Record<string, unknown>) => {
     setEditingCustomer(customer);
     reset({
-      name: customer.name,
-      phone: customer.phone,
-      email: customer.email || '',
-      address: customer.address || '',
-      gstin: customer.gstin || '',
+      name: customer.name as string,
+      phone: customer.phone as string,
+      email: (customer.email as string) || '',
+      address: (customer.address as string) || '',
+      gstin: (customer.gstin as string) || '',
     });
     setIsFormOpen(true);
   };
 
   const onFormSubmit = (data: CustomerFormData) => {
     if (editingCustomer) {
-      updateMutation.mutate({ id: editingCustomer.id, body: data });
+      updateMutation.mutate({ id: editingCustomer.id as string, body: data });
     } else {
       createMutation.mutate(data);
     }
