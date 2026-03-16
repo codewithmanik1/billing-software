@@ -30,6 +30,8 @@ export const InvoiceDetail: React.FC = () => {
   const currentTab = searchParams.get('tab') || 'details';
   
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isDeletePaymentOpen, setIsDeletePaymentOpen] = useState(false);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [payPage, setPayPage] = useState(1);
   const [payPerPage, setPayPerPage] = useState(5);
   
@@ -70,7 +72,7 @@ export const InvoiceDetail: React.FC = () => {
       setIsPaymentModalOpen(false);
       reset();
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to record payment'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to record payment'),
   });
 
   const deletePaymentMutation = useMutation({
@@ -80,7 +82,7 @@ export const InvoiceDetail: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       toast.success('Payment record removed');
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete payment'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to delete payment'),
   });
 
   if (isLoading) {
@@ -124,18 +126,24 @@ export const InvoiceDetail: React.FC = () => {
     addPaymentMutation.mutate(data);
   };
 
-  const handleDeletePayment = (paymentId: string) => {
-    deletePaymentMutation.mutate(paymentId);
+  const handleDeletePayment = () => {
+    if (deletingPaymentId) {
+      deletePaymentMutation.mutate(deletingPaymentId);
+      setIsDeletePaymentOpen(false);
+      setDeletingPaymentId(null);
+    }
   };
 
   // Compute running balance for the payments table
-  let runningBalance = Number(invoice.grandTotal);
   const sortedPayments = [...invoicePayments].sort((a, b) => new Date(a.paymentDate).getTime() - new Date(b.paymentDate).getTime());
-  
-  const paymentsWithBalance = sortedPayments.map(p => {
-    runningBalance -= Number(p.amount);
-    return { ...p, balanceAfter: runningBalance };
-  }).reverse();
+
+  const paymentsWithBalance = (() => {
+    let balance = Number(invoice.grandTotal);
+    return sortedPayments.map(p => {
+      balance -= Number(p.amount);
+      return { ...p, balanceAfter: balance };
+    }).reverse();
+  })();
 
   const paginatedPayments = paymentsWithBalance.slice(
     (payPage - 1) * payPerPage,
@@ -262,7 +270,7 @@ export const InvoiceDetail: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {items.map((item: any, idx: number) => (
+                {items.map((item: Record<string, unknown>, idx: number) => (
                   <tr key={item.id || idx} className="text-gray-800 hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-5">
                        <div className="font-bold text-gray-900">{item.description}</div>
@@ -387,14 +395,14 @@ export const InvoiceDetail: React.FC = () => {
                       <td className="px-6 py-5 text-right font-medium text-gray-400 font-mono">{formatCurrency(p.balanceAfter)}</td>
                       <td className="px-8 py-5">
                         <div className="flex justify-center group-hover:opacity-100 opacity-60 transition-opacity">
-                          <button 
+                          <button
                             onClick={() => {
-                               if (confirm('Delete this payment record? This will increase the pending balance.')) {
-                                  handleDeletePayment(p.id);
-                               }
+                              setDeletingPaymentId(p.id);
+                              setIsDeletePaymentOpen(true);
                             }}
                             className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
                             title="Delete Payment"
+                            aria-label="Delete Payment"
                           >
                             <Trash2 size={18} />
                           </button>
@@ -433,6 +441,32 @@ export const InvoiceDetail: React.FC = () => {
           )}
          </div>
       )}
+
+      {/* Delete Payment Confirmation Modal */}
+      <Modal isOpen={isDeletePaymentOpen} onClose={() => setIsDeletePaymentOpen(false)} title="Delete Payment">
+        <div className="space-y-6 pt-2">
+          <div className="flex items-start gap-4 p-4 bg-red-50 dark:bg-red-500/5 rounded-xl border border-red-100 dark:border-red-500/10">
+            <div className="p-2 bg-red-500 rounded-lg text-white">
+              <Trash2 size={24} />
+            </div>
+            <div>
+              <p className="font-bold text-red-600 dark:text-red-400">Delete this payment record?</p>
+              <p className="text-sm text-red-600/70 dark:text-red-400/70 mt-1">This will increase the pending balance on this invoice.</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-4">
+            <button onClick={() => setIsDeletePaymentOpen(false)} className="px-5 py-2 text-gray-500 hover:text-gray-700 font-bold uppercase tracking-wider text-xs">Cancel</button>
+            <button
+              onClick={handleDeletePayment}
+              disabled={deletePaymentMutation.isPending}
+              className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-wider text-xs shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all flex items-center gap-2"
+            >
+              {deletePaymentMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+              Delete Payment
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Payment Modal */}
       <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record Collection">

@@ -50,7 +50,7 @@ export const InvoiceList: React.FC = () => {
       setIsDeleteOpen(false);
       setDeletingId(null);
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to delete invoice'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to delete invoice'),
   });
 
   const handleDelete = () => {
@@ -143,7 +143,7 @@ export const InvoiceList: React.FC = () => {
                    </td>
                 </tr>
               ) : invoices.length > 0 ? (
-                invoices.map((inv: any) => (
+                invoices.map((inv: Record<string, unknown> & { id: string; invoiceNumber: string; invoiceDate: string; customer: { name: string; phone: string }; grandTotal: number; totalPaid: number; balanceDue: number; status: string }) => (
                   <tr key={inv.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 group">
                     <td className="px-6 py-5">
                        <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-base group-hover:text-[#B8860B] transition-colors">{inv.invoiceNumber}</div>
@@ -187,27 +187,31 @@ export const InvoiceList: React.FC = () => {
                           onClick={() => navigate(`/invoices/${inv.id}`)}
                           className="p-2.5 text-gray-400 hover:text-blue-500 transition-colors rounded-xl hover:bg-blue-500/10"
                           title="View Insights"
+                          aria-label="View invoice details"
                         >
                           <Eye size={18} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => navigate(`/invoices/${inv.id}?tab=payments`)}
                           className="p-2.5 text-gray-400 hover:text-green-500 transition-colors rounded-xl hover:bg-green-500/10"
                           title="Register Payment"
+                          aria-label="Register payment"
                         >
                           <IndianRupee size={18} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => navigate(`/invoices/${inv.id}/edit`)}
                           className="p-2.5 text-gray-400 hover:text-[#B8860B] transition-colors rounded-xl hover:bg-[#B8860B]/10"
                           title="Amend Record"
+                          aria-label="Edit invoice"
                         >
                           <Edit2 size={18} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => { setDeletingId(inv.id); setIsDeleteOpen(true); }}
                           className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
                           title="Void Invoice"
+                          aria-label="Delete invoice"
                         >
                           <Trash2 size={18} />
                         </button>

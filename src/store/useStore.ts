@@ -14,17 +14,28 @@ interface AuthState {
   logout: () => void;
 }
 
+const getStoredUser = (): User | null => {
+  try {
+    const stored = sessionStorage.getItem('mj_user');
+    return stored ? JSON.parse(stored) : null;
+  } catch {
+    return null;
+  }
+};
+
 export const useStore = create<AuthState>((set) => ({
   isAuthenticated: !!sessionStorage.getItem('mj_token'),
-  user: null, // We'll fetch user details via /api/auth/me if needed, or set during login
-  
+  user: getStoredUser(),
+
   login: (token, user) => {
     sessionStorage.setItem('mj_token', token);
+    sessionStorage.setItem('mj_user', JSON.stringify(user));
     set({ isAuthenticated: true, user });
   },
-  
+
   logout: () => {
     sessionStorage.removeItem('mj_token');
+    sessionStorage.removeItem('mj_user');
     set({ isAuthenticated: false, user: null });
   },
 }));

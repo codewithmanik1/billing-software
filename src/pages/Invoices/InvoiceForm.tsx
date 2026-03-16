@@ -84,14 +84,17 @@ export const InvoiceForm: React.FC = () => {
       reset({
         customerId: existingInvoice.customerId,
         invoiceDate: format(new Date(existingInvoice.invoiceDate), 'yyyy-MM-dd'),
-        items: existingInvoice.items.map((item: any) => ({
+        items: existingInvoice.items.map((item: Record<string, unknown>) => ({
+          id: item.id as string,
+          description: (item.description as string) || '',
+          metalType: (item.metalType as string) || '22K',
           weightGrams: Number(item.weightGrams) || 0,
           ratePerGram: Number(item.ratePerGram) || 0,
           makingCharges: Number(item.makingCharges) || 0,
           discount: Number(item.discount || 0),
           lineTotal: Number(item.lineTotal || item.amount || 0)
         })),
-        discount: Number(existingInvoice.discount),
+        discount: Number(existingInvoice.additionalDiscount || existingInvoice.discount || 0),
         gstPercent: Number(existingInvoice.gstPercent),
         notes: existingInvoice.notes || ''
       });
@@ -122,7 +125,8 @@ export const InvoiceForm: React.FC = () => {
         setValue(`items.${index}.lineTotal`, lineTotal, { shouldValidate: true });
       }
     });
-  }, [JSON.stringify(watchItems), setValue]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchItems.map(i => `${i?.weightGrams}-${i?.ratePerGram}-${i?.makingCharges}-${i?.discount}`).join(','), setValue]);
 
   const subtotal = watchItems.reduce((sum, item) => sum + (Number(item?.lineTotal) || 0), 0);
   const amountAfterDiscount = Math.max(0, subtotal - Number(watchDiscount));
@@ -138,7 +142,7 @@ export const InvoiceForm: React.FC = () => {
       toast.success('Invoice generated successfully');
       navigate('/invoices');
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to create invoice'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to create invoice'),
   });
 
   const updateMutation = useMutation({
@@ -149,7 +153,7 @@ export const InvoiceForm: React.FC = () => {
       toast.success('Invoice updated successfully');
       navigate(`/invoices/${id}`);
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update invoice'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to update invoice'),
   });
 
   const onSubmit = (data: InvoiceFormData) => {
@@ -161,7 +165,7 @@ export const InvoiceForm: React.FC = () => {
   };
 
   const selectedCustomerId = watch('customerId');
-  const selectedCustomerObj = customers.find((c: any) => c.id === selectedCustomerId) || existingInvoice?.customer;
+  const selectedCustomerObj = customers.find((c: Record<string, unknown>) => c.id === selectedCustomerId) || existingInvoice?.customer;
   const formattedDateForHeader = watchDate ? format(new Date(watchDate), 'dd MMM yyyy') : '';
 
   if (isEditing && isLoadingInvoice) {
@@ -186,7 +190,7 @@ export const InvoiceForm: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Invoice Letterhead Preview Section */}
         <div className="card p-8 bg-white dark:bg-[#1A1A1A] shadow-xl rounded-2xl flex justify-between items-center border border-gray-100 dark:border-dark-800">
            <div className="flex items-center gap-6">
@@ -236,13 +240,13 @@ export const InvoiceForm: React.FC = () => {
                         <div className="relative">
                           <Combobox.Input
                             className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none transition-all"
-                            displayValue={(id: string) => customers.find((c: any) => c.id === id)?.name || existingInvoice?.customer.name || ''}
+                            displayValue={(id: string) => customers.find((c: Record<string, unknown>) => c.id === id)?.name as string || existingInvoice?.customer.name || ''}
                             onChange={(event) => setCustomerQuery(event.target.value)}
                             placeholder="Rajesh Sharma"
                           />
                           <Combobox.Options className="absolute z-20 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 py-1 text-base shadow-2xl">
                             {/* ... same customers map ... */}
-                            {customers.map((customer: any) => (
+                            {customers.map((customer: Record<string, string>) => (
                                 <Combobox.Option key={customer.id} className={({ active }) => `relative cursor-pointer select-none py-3 pl-4 pr-4 ${active ? 'bg-[#B8860B]/10 text-[#B8860B]' : 'text-gray-700 animate-in fade-in transition-all'}`} value={customer.id}>
                                   <div className="font-bold">{customer.name}</div>
                                 </Combobox.Option>

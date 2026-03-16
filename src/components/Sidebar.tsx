@@ -53,6 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
           onClick={onToggle}
           className="absolute -right-3 top-7 w-6 h-6 rounded-full bg-[#B8860B] text-white flex items-center justify-center shadow-lg cursor-pointer hover:bg-[#FFD700] transition-colors z-50"
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </button>
@@ -156,6 +157,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
             onClick={toggleTheme}
             className="w-full flex items-center bg-[#1A1A1A] border border-[#2E2E2E] rounded-full p-1 relative hover:border-[#B8860B]/50 transition-all duration-300"
             title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            aria-label={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
           >
             <span className={`absolute top-1 h-7 w-[calc(50%-4px)] rounded-full bg-[#B8860B]/90 shadow-[0_0_10px_rgba(184,134,11,0.4)] transition-all duration-300 ${
               theme === 'light' ? 'left-1' : 'left-[calc(50%+3px)]'

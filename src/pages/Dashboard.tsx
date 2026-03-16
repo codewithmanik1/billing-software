@@ -123,7 +123,7 @@ export const Dashboard: React.FC = () => {
                 <XAxis dataKey="name" stroke="#6b7280" tick={{ fill: '#6b7280' }} axisLine={false} tickLine={false} />
                 <Tooltip
                    cursor={{ fill: 'rgba(184, 134, 11, 0.05)' }}
-                  formatter={(value: any) => formatCurrency(value)}
+                  formatter={(value) => formatCurrency(Number(value))}
                   contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #2E2E2E', borderRadius: '12px', color: '#F5F5F0', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.4)' }}
                 />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={40}>
@@ -174,7 +174,7 @@ export const Dashboard: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  recentInvoices.map((inv: any) => (
+                  recentInvoices.map((inv: Record<string, unknown> & { id: string; invoiceNumber: string; customer: { name: string; phone: string }; invoiceDate: string; grandTotal: number; status: string }) => (
                     <tr
                       key={inv.id}
                       className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 cursor-pointer group"
@@ -189,11 +189,11 @@ export const Dashboard: React.FC = () => {
                       <td className="px-6 py-4.5 text-right font-bold text-[#1A1209] dark:text-[#F5F5F0]">{formatCurrency(Number(inv.grandTotal))}</td>
                       <td className="px-6 py-4.5 text-center">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider ${
-                          inv.status === 'paid' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
-                          inv.status === 'partial' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
+                          inv.status === 'PAID' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                          inv.status === 'PARTIAL' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
                           'bg-red-500/10 text-red-600 dark:text-red-400'
                         }`}>
-                          {inv.status.toUpperCase()}
+                          {inv.status}
                         </span>
                       </td>
                     </tr>

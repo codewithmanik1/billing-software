@@ -222,7 +222,7 @@ export const Reports: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-dark-800">
-                {outstandingInvoices.map((inv: any) => (
+                {outstandingInvoices.map((inv: Record<string, unknown> & { id: string; invoiceNumber: string; invoiceDate: string; customer: { name: string; phone: string }; totalAmount: number; pendingAmount: number }) => (
                   <tr key={inv.id} className="bg-white dark:bg-dark-900 hover:bg-[#FFF8E7]/50 dark:hover:bg-dark-800 transition-colors group">
                     <td className="px-8 py-4">
                       <Link to={`/invoices/${inv.id}`} className="text-[#B8860B] font-mono font-bold hover:underline">

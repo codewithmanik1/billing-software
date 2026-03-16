@@ -1,16 +1,39 @@
 import { Request, Response } from 'express';
-import { PrismaClient, InvoiceStatus } from '@prisma/client';
+import { InvoiceStatus, Prisma } from '@prisma/client';
+import { z } from 'zod';
+import prisma from '../utils/prisma';
 import { successResponse, errorResponse } from '../utils/apiResponse';
 import { generateNextInvoiceNumber } from '../utils/invoiceNumber';
 
-const prisma = new PrismaClient();
+const invoiceItemSchema = z.object({
+  description: z.string().min(1, 'Item description is required'),
+  metalType: z.string().min(1, 'Metal type is required'),
+  weightGrams: z.number().positive('Weight must be positive'),
+  ratePerGram: z.number().positive('Rate must be positive'),
+  makingCharges: z.number().min(0).default(0),
+  discount: z.number().min(0).default(0),
+});
+
+const createInvoiceSchema = z.object({
+  customerId: z.string().min(1, 'Customer is required'),
+  invoiceDate: z.string().min(1, 'Invoice date is required'),
+  dueDate: z.string().optional().nullable(),
+  items: z.array(invoiceItemSchema).min(1, 'At least one item is required'),
+  gstPercent: z.number().min(0).max(100).default(3),
+  additionalDiscount: z.number().min(0).default(0),
+  discount: z.number().min(0).optional(),
+  notes: z.string().optional().nullable(),
+  terms: z.string().optional().nullable(),
+});
 
 export const getAllInvoices = async (req: Request, res: Response) => {
   const { search, status, page = '1', limit = '10', fromDate, toDate } = req.query;
-  const skip = (Number(page) - 1) * Number(limit);
+  const pageNum = Math.max(1, Number(page));
+  const limitNum = Math.max(1, Number(limit));
+  const skip = (pageNum - 1) * limitNum;
 
   try {
-    const where: any = {};
+    const where: Prisma.InvoiceWhereInput = {};
     if (status && status !== 'all') {
       where.status = status as InvoiceStatus;
     }
@@ -21,11 +44,11 @@ export const getAllInvoices = async (req: Request, res: Response) => {
       where.invoiceDate = {};
       if (effectiveFromDate) {
         const d = new Date(String(effectiveFromDate));
-        if (!isNaN(d.getTime())) where.invoiceDate.gte = d;
+        if (!isNaN(d.getTime())) (where.invoiceDate as Prisma.DateTimeFilter).gte = d;
       }
       if (effectiveToDate) {
         const d = new Date(String(effectiveToDate));
-        if (!isNaN(d.getTime())) where.invoiceDate.lte = d;
+        if (!isNaN(d.getTime())) (where.invoiceDate as Prisma.DateTimeFilter).lte = d;
       }
     }
     if (search) {
@@ -45,7 +68,7 @@ export const getAllInvoices = async (req: Request, res: Response) => {
           _count: { select: { items: true } },
         },
         skip,
-        take: Number(limit),
+        take: limitNum,
         orderBy: { invoiceDate: 'desc' },
       }),
       prisma.invoice.count({ where }),
@@ -53,13 +76,15 @@ export const getAllInvoices = async (req: Request, res: Response) => {
 
     const formattedInvoices = invoices.map((inv) => {
       const totalPaid = inv.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const grandTotal = Number(inv.grandTotal);
       const lastPayment = inv.payments.sort((a, b) => b.paymentDate.getTime() - a.paymentDate.getTime())[0];
 
       return {
         ...inv,
         totalPaid,
-        pendingBalance: Number(inv.grandTotal) - totalPaid,
-        percentPaid: (totalPaid / Number(inv.grandTotal)) * 100,
+        pendingBalance: grandTotal - totalPaid,
+        balanceDue: grandTotal - totalPaid,
+        percentPaid: grandTotal > 0 ? (totalPaid / grandTotal) * 100 : 0,
         itemCount: inv._count.items,
         lastPaymentDate: lastPayment ? lastPayment.paymentDate : null,
       };
@@ -70,16 +95,17 @@ export const getAllInvoices = async (req: Request, res: Response) => {
         invoices: formattedInvoices,
         pagination: {
           total,
-          page: Number(page),
-          limit: Number(limit),
-          totalPages: Math.ceil(total / Number(limit)),
-          hasNext: skip + Number(limit) < total,
-          hasPrev: Number(page) > 1,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: limitNum > 0 ? Math.ceil(total / limitNum) : 0,
+          hasNext: skip + limitNum < total,
+          hasPrev: pageNum > 1,
         },
       })
     );
-  } catch (error: any) {
-    return res.status(500).json(errorResponse(error.message));
+  } catch (error) {
+    console.error('getAllInvoices error:', error);
+    return res.status(500).json(errorResponse('Failed to fetch invoices'));
   }
 };
 
@@ -87,7 +113,7 @@ export const getInvoiceById = async (req: Request, res: Response) => {
   const id = req.params.id as string;
   try {
     const invoice = await prisma.invoice.findUnique({
-      where: { id: id as string },
+      where: { id },
       include: {
         customer: true,
         items: { orderBy: { sortOrder: 'asc' } },
@@ -97,30 +123,43 @@ export const getInvoiceById = async (req: Request, res: Response) => {
 
     if (!invoice) return res.status(404).json(errorResponse('Invoice not found'));
 
-    const totalPaid = (invoice as any).payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalPaid = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const grandTotal = Number(invoice.grandTotal);
 
     return res.json(
       successResponse({
         ...invoice,
         totalPaid,
-        pendingBalance: Number(invoice.grandTotal) - totalPaid,
-        percentPaid: (totalPaid / Number(invoice.grandTotal)) * 100,
+        pendingBalance: grandTotal - totalPaid,
+        balanceDue: grandTotal - totalPaid,
+        percentPaid: grandTotal > 0 ? (totalPaid / grandTotal) * 100 : 0,
       })
     );
-  } catch (error: any) {
-    return res.status(500).json(errorResponse(error.message));
+  } catch (error) {
+    console.error('getInvoiceById error:', error);
+    return res.status(500).json(errorResponse('Failed to fetch invoice'));
   }
 };
 
 export const createInvoice = async (req: Request, res: Response) => {
-  const { customerId, invoiceDate, dueDate, items, gstPercent, additionalDiscount, notes, terms } = req.body;
+  const parsed = createInvoiceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json(errorResponse('Validation failed', parsed.error.issues.map(e => ({ field: e.path.join('.'), message: e.message }))));
+  }
+
+  const { customerId, invoiceDate, dueDate, items, gstPercent, notes, terms } = parsed.data;
+  const additionalDiscount = parsed.data.additionalDiscount || parsed.data.discount || 0;
 
   try {
+    const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+    if (!customer) {
+      return res.status(404).json(errorResponse('Customer not found'));
+    }
+
     const invoiceNumber = await generateNextInvoiceNumber();
 
-    // 2. Calculate each item's lineTotal and subtotal
     let subtotal = 0;
-    const itemsData = items.map((item: any, index: number) => {
+    const itemsData = items.map((item, index) => {
       const lineTotal =
         Number(item.weightGrams) * Number(item.ratePerGram) +
         Number(item.makingCharges || 0) -
@@ -133,8 +172,8 @@ export const createInvoice = async (req: Request, res: Response) => {
       };
     });
 
-    const gstAmount = (subtotal - Number(additionalDiscount || 0)) * (Number(gstPercent) / 100);
-    const grandTotal = subtotal - Number(additionalDiscount || 0) + gstAmount;
+    const gstAmount = (subtotal - additionalDiscount) * (gstPercent / 100);
+    const grandTotal = subtotal - additionalDiscount + gstAmount;
 
     const invoice = await prisma.invoice.create({
       data: {
@@ -143,9 +182,9 @@ export const createInvoice = async (req: Request, res: Response) => {
         dueDate: dueDate ? new Date(dueDate) : null,
         customerId,
         subtotal,
-        gstPercent: Number(gstPercent),
+        gstPercent,
         gstAmount,
-        additionalDiscount: Number(additionalDiscount || 0),
+        additionalDiscount,
         grandTotal,
         notes,
         terms,
@@ -161,8 +200,9 @@ export const createInvoice = async (req: Request, res: Response) => {
     });
 
     return res.status(201).json(successResponse(invoice));
-  } catch (error: any) {
-    return res.status(500).json(errorResponse(error.message));
+  } catch (error) {
+    console.error('createInvoice error:', error);
+    return res.status(500).json(errorResponse('Failed to create invoice'));
   }
 };
 
@@ -172,16 +212,16 @@ export const updateInvoice = async (req: Request, res: Response) => {
 
   try {
     const existingInvoice = await prisma.invoice.findUnique({
-      where: { id: id as string },
+      where: { id },
       include: { payments: true },
     });
 
     if (!existingInvoice) return res.status(404).json(errorResponse('Invoice not found'));
 
-    const totalPaid = (existingInvoice as any).payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+    const totalPaid = existingInvoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
 
     let subtotal = 0;
-    const itemsData = items.map((item: any, index: number) => {
+    const itemsData = items.map((item: { description: string; metalType: string; weightGrams: number; ratePerGram: number; makingCharges?: number; discount?: number }, index: number) => {
       const lineTotal =
         Number(item.weightGrams) * Number(item.ratePerGram) +
         Number(item.makingCharges || 0) -
@@ -199,21 +239,22 @@ export const updateInvoice = async (req: Request, res: Response) => {
       };
     });
 
-    const gstAmount = (subtotal - Number(additionalDiscount || 0)) * (Number(gstPercent) / 100);
-    const grandTotal = subtotal - Number(additionalDiscount || 0) + gstAmount;
+    const effectiveDiscount = Number(additionalDiscount || rest.discount || 0);
+    const gstAmount = (subtotal - effectiveDiscount) * (Number(gstPercent) / 100);
+    const grandTotal = subtotal - effectiveDiscount + gstAmount;
 
     if (totalPaid > grandTotal) {
       return res.status(400).json(errorResponse(`Cannot update: New total ${grandTotal} is less than amount already paid ${totalPaid}`));
     }
 
     let nextStatus: InvoiceStatus = InvoiceStatus.UNPAID;
-    if (totalPaid >= grandTotal) nextStatus = InvoiceStatus.PAID;
+    if (totalPaid >= grandTotal && grandTotal > 0) nextStatus = InvoiceStatus.PAID;
     else if (totalPaid > 0) nextStatus = InvoiceStatus.PARTIAL;
 
     const updatedInvoice = await prisma.$transaction(async (tx) => {
-      await tx.invoiceItem.deleteMany({ where: { invoiceId: id as string } });
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
       return tx.invoice.update({
-        where: { id: id as string },
+        where: { id },
         data: {
           ...rest,
           invoiceDate: rest.invoiceDate ? new Date(rest.invoiceDate) : undefined,
@@ -221,7 +262,7 @@ export const updateInvoice = async (req: Request, res: Response) => {
           subtotal,
           gstPercent: Number(gstPercent),
           gstAmount,
-          additionalDiscount: Number(additionalDiscount || 0),
+          additionalDiscount: effectiveDiscount,
           grandTotal,
           status: nextStatus,
           items: {
@@ -233,22 +274,29 @@ export const updateInvoice = async (req: Request, res: Response) => {
     });
 
     return res.json(successResponse(updatedInvoice));
-  } catch (error: any) {
-    return res.status(500).json(errorResponse(error.message));
+  } catch (error) {
+    console.error('updateInvoice error:', error);
+    return res.status(500).json(errorResponse('Failed to update invoice'));
   }
 };
 
 export const deleteInvoice = async (req: Request, res: Response) => {
   const id = req.params.id as string;
   try {
-    const inv = await prisma.invoice.delete({ where: { id: id as string } });
+    const inv = await prisma.invoice.delete({ where: { id } });
     return res.json(successResponse(null, `Invoice ${inv.invoiceNumber} deleted successfully`));
-  } catch (error: any) {
-    return res.status(500).json(errorResponse(error.message));
+  } catch (error) {
+    console.error('deleteInvoice error:', error);
+    return res.status(500).json(errorResponse('Failed to delete invoice'));
   }
 };
 
-export const getNextNumber = async (req: Request, res: Response) => {
+export const getNextNumber = async (_req: Request, res: Response) => {
+  try {
     const next = await generateNextInvoiceNumber();
     return res.json(successResponse({ nextNumber: next }));
+  } catch (error) {
+    console.error('getNextNumber error:', error);
+    return res.status(500).json(errorResponse('Failed to generate invoice number'));
+  }
 };

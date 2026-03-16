@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
-import { Plus, Search, Edit2, Trash2, Loader2, UserPlus, Phone, Mail, MapPin } from 'lucide-react';
+import { Search, Edit2, Trash2, Loader2, UserPlus, Phone, Mail } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,7 +28,7 @@ export const Customers: React.FC = () => {
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<any | null>(null);
+  const [editingCustomer, setEditingCustomer] = useState<Record<string, unknown> | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CustomerFormData>({
@@ -55,7 +55,7 @@ export const Customers: React.FC = () => {
       toast.success('Customer added successfully');
       setIsFormOpen(false);
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to add customer'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to add customer'),
   });
 
   const updateMutation = useMutation({
@@ -65,7 +65,7 @@ export const Customers: React.FC = () => {
       toast.success('Customer updated successfully');
       setIsFormOpen(false);
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Failed to update customer'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to update customer'),
   });
 
   const deleteMutation = useMutation({
@@ -75,7 +75,7 @@ export const Customers: React.FC = () => {
       toast.success('Customer deleted successfully');
       setIsDeleteOpen(false);
     },
-    onError: (err: any) => toast.error(err.response?.data?.message || 'Cannot delete customer'),
+    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Cannot delete customer'),
   });
 
   const formatCurrency = (amount: number) => {
@@ -88,7 +88,7 @@ export const Customers: React.FC = () => {
     setIsFormOpen(true);
   };
 
-  const handleOpenEdit = (customer: any) => {
+  const handleOpenEdit = (customer: Record<string, unknown>) => {
     setEditingCustomer(customer);
     reset({
       name: customer.name,
@@ -171,7 +171,7 @@ export const Customers: React.FC = () => {
                    </td>
                 </tr>
               ) : customers.length > 0 ? (
-                customers.map((customer: any) => (
+                customers.map((customer: Record<string, unknown> & { id: string; name: string; phone: string; email?: string; gstin?: string; totalInvoices: number; totalPaid: number; outstandingBalance: number }) => (
                   <tr key={customer.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 group">
                     <td className="px-6 py-5">
                        <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-base group-hover:text-[#B8860B] transition-colors">{customer.name}</div>
@@ -208,13 +208,15 @@ export const Customers: React.FC = () => {
                           onClick={() => handleOpenEdit(customer)}
                           className="p-2.5 text-gray-400 hover:text-[#B8860B] transition-colors rounded-xl hover:bg-[#B8860B]/10"
                           title="Edit Profile"
+                          aria-label="Edit customer"
                         >
                           <Edit2 size={18} />
                         </button>
-                        <button 
+                        <button
                           onClick={() => { setDeletingId(customer.id); setIsDeleteOpen(true); }}
                           className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
                           title="Remove Customer"
+                          aria-label="Delete customer"
                         >
                           <Trash2 size={18} />
                         </button>

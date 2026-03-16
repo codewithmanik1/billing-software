@@ -1,16 +1,16 @@
 import { NextFunction, Request, Response } from 'express';
-import { ApiResponse, errorResponse } from '../utils/apiResponse';
+import { errorResponse } from '../utils/apiResponse';
 
 export const errorMiddleware = (
-  err: any,
-  req: Request,
+  err: Error & { status?: number },
+  _req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ) => {
   console.error('❌ Error:', err);
 
   const statusCode = err.status || 500;
-  const message = err.message || 'Internal Server Error';
+  const message = process.env.NODE_ENV === 'production' ? 'Internal Server Error' : (err.message || 'Internal Server Error');
 
   res.status(statusCode).json(errorResponse(message));
 };
