@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -11,6 +11,8 @@ import { Combobox } from '@headlessui/react';
 import { format } from 'date-fns';
 import mjLogo from '../../assets/mj_logo.png';
 import { useProfile } from '../../context/ProfileContext';
+import { useEnterKeyNavigation } from '../../lib/useEnterKeyNavigation';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 const invoiceItemSchema = z.object({
   id: z.string().optional(),
@@ -45,6 +47,17 @@ export const InvoiceForm: React.FC = () => {
   
   const [customerQuery, setCustomerQuery] = useState('');
   const { profile } = useProfile();
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingData, setPendingData] = useState<InvoiceFormData | null>(null);
+
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEnterKeyNavigation(formRef, () => {
+    handleSubmit((data) => {
+      setPendingData(data);
+      setIsConfirmOpen(true);
+    })();
+  });
 
   // Fetching data
   const { data: customersRes } = useQuery({
@@ -159,10 +172,17 @@ export const InvoiceForm: React.FC = () => {
   });
 
   const onSubmit = (data: InvoiceFormData) => {
-    if (isEditing) {
-      updateMutation.mutate(data);
-    } else {
-      createMutation.mutate(data);
+    setPendingData(data);
+    setIsConfirmOpen(true);
+  };
+
+  const handleConfirmSave = () => {
+    if (pendingData) {
+      if (isEditing) {
+        updateMutation.mutate(pendingData);
+      } else {
+        createMutation.mutate(pendingData);
+      }
     }
   };
 
@@ -192,10 +212,10 @@ export const InvoiceForm: React.FC = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Invoice Letterhead Preview Section */}
-        <div className="card p-8 bg-white dark:bg-[#1A1A1A] shadow-xl rounded-2xl flex justify-between items-center border border-gray-100 dark:border-dark-800">
-           <div className="flex items-center gap-6">
+        <div className="card p-4 md:p-8 bg-white dark:bg-[#1A1A1A] shadow-xl rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-100 dark:border-dark-800 gap-6">
+           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6 text-center md:text-left w-full md:w-auto">
               <div className="relative group">
                 <div className="absolute inset-0 rounded-2xl bg-[#B8860B]/10 blur-xl group-hover:blur-2xl transition-all duration-500" />
                 <img
@@ -204,7 +224,7 @@ export const InvoiceForm: React.FC = () => {
                   onError={(e) => {
                     e.currentTarget.src = '/mj_logo.png';
                   }}
-                  className="relative w-20 h-20 rounded-2xl object-contain bg-white p-2 shadow-inner border border-gray-100"
+                  className="relative w-16 h-16 md:w-20 md:h-20 rounded-2xl object-contain bg-white p-2 shadow-inner border border-gray-100"
                 />
               </div>
               <div className="space-y-1">
@@ -217,9 +237,9 @@ export const InvoiceForm: React.FC = () => {
               </div>
            </div>
 
-           <div className="text-right">
-              <h1 className="text-3xl font-black text-[#B8860B] leading-none mb-2">INVOICE</h1>
-              <div className="text-lg font-bold text-gray-900 dark:text-white font-mono tracking-tighter">
+           <div className="w-full text-center md:text-right mt-4 md:mt-0">
+              <h1 className="text-2xl md:text-3xl font-black text-[#B8860B] leading-none mb-2">INVOICE</h1>
+              <div className="text-base md:text-lg font-bold text-gray-900 dark:text-white font-mono tracking-tighter">
                  {isEditing ? existingInvoice?.invoiceNumber : 'INV-2024-001'}
               </div>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Date: {formattedDateForHeader || '15 Mar 2026'}</p>
@@ -227,8 +247,8 @@ export const InvoiceForm: React.FC = () => {
         </div>
 
         {/* Header Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-3 card p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
+          <div className="lg:col-span-3 card p-4 md:p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Customer Details</h2>
             
             <div className="space-y-6">
@@ -241,6 +261,7 @@ export const InvoiceForm: React.FC = () => {
                       <Combobox value={field.value} onChange={field.onChange}>
                         <div className="relative">
                           <Combobox.Input
+                            data-field-order="1"
                             className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none transition-all"
                             displayValue={(id: string) => customers.find((c: Record<string, unknown>) => c.id === id)?.name as string || existingInvoice?.customer.name || ''}
                             onChange={(event) => setCustomerQuery(event.target.value)}
@@ -273,16 +294,16 @@ export const InvoiceForm: React.FC = () => {
             </div>
           </div>
 
-          <div className="lg:col-span-2 card p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
+          <div className="lg:col-span-2 card p-4 md:p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">Invoice Meta</h2>
             <div className="space-y-5">
               <div className="space-y-1.5">
                   <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Date <span className="text-red-500">*</span></label>
-                  <input type="date" {...register('invoiceDate')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none" />
+                  <input data-field-order="2" type="date" {...register('invoiceDate')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none" />
               </div>
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Notes / Remarks</label>
-                <textarea {...register('notes')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none h-24 italic" placeholder="Thank you for your business!" />
+                <textarea data-field-order="3" {...register('notes')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none h-24 italic" placeholder="Thank you for your business!" />
               </div>
             </div>
           </div>
@@ -301,17 +322,17 @@ export const InvoiceForm: React.FC = () => {
             </button>
           </div>
           
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto shadow-[inset_-15px_0_15px_-15px_rgba(184,134,11,0.15)] md:shadow-none min-h-[300px]">
+            <table className="w-full text-left text-sm min-w-[700px]">
               <thead className="bg-gray-50 dark:bg-dark-900 border-b border-gray-100 dark:border-dark-800">
                 <tr>
-                  <th className="py-4 pl-6 pr-2 font-bold text-gray-500 uppercase tracking-widest text-[10px]" style={{ width: '40%' }}>Item Name</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '7%' }}>Purity</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '11%' }}>Weight (g)</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '11%' }}>Rate/g (₹)</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center" style={{ width: '11%' }}>Making (₹)</th>
-                  <th className="py-4 pl-1 pr-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right" style={{ width: '13%' }}>Amount (₹)</th>
-                  <th className="py-4 px-1 text-center" style={{ width: '7%' }}></th>
+                  <th className="py-4 pl-6 pr-2 font-bold text-gray-500 uppercase tracking-widest text-[10px] whitespace-normal max-w-[120px]" style={{ width: '35%' }}>Item Name</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '8%' }}>Purity</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '12%' }}>Weight (g)</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '12%' }}>Rate/g (₹)</th>
+                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '12%' }}>Making (₹)</th>
+                  <th className="py-4 pl-1 pr-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right whitespace-normal" style={{ width: '13%' }}>Amount (₹)</th>
+                  <th className="py-4 px-1 text-center" style={{ width: '8%' }}></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-dark-800">
@@ -319,6 +340,7 @@ export const InvoiceForm: React.FC = () => {
                   <tr key={field.id} className="bg-white dark:bg-dark-900 transition-colors">
                     <td className="pl-6 pr-2 py-4">
                       <input
+                        data-field-order={10 + index * 10 + 1}
                         {...register(`items.${index}.description`)}
                         className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                         placeholder="18K Gold Earrings"
@@ -326,6 +348,7 @@ export const InvoiceForm: React.FC = () => {
                     </td>
                     <td className="px-1 py-4">
                       <select
+                        data-field-order={10 + index * 10 + 2}
                         {...register(`items.${index}.metalType`)}
                         className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-0 py-2 text-gray-900 dark:text-white font-bold text-center appearance-none focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
                       >
@@ -337,6 +360,7 @@ export const InvoiceForm: React.FC = () => {
                     </td>
                     <td className="px-1 py-4">
                       <input
+                        data-field-order={10 + index * 10 + 3}
                         type="number" step="0.001"
                         {...register(`items.${index}.weightGrams`, { valueAsNumber: true })}
                         className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
@@ -344,6 +368,7 @@ export const InvoiceForm: React.FC = () => {
                     </td>
                     <td className="px-1 py-4">
                       <input
+                        data-field-order={10 + index * 10 + 4}
                         type="number" step="1"
                         {...register(`items.${index}.ratePerGram`, { valueAsNumber: true })}
                         className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
@@ -351,6 +376,7 @@ export const InvoiceForm: React.FC = () => {
                     </td>
                     <td className="px-1 py-4">
                       <input
+                        data-field-order={10 + index * 10 + 5}
                         type="number" step="1"
                         {...register(`items.${index}.makingCharges`, { valueAsNumber: true })}
                         className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
@@ -366,7 +392,7 @@ export const InvoiceForm: React.FC = () => {
                         type="button"
                         onClick={() => remove(index)}
                         disabled={fields.length === 1}
-                        className="p-1.5 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50 disabled:opacity-0"
+                        className="py-3 px-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50 disabled:opacity-0"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -380,7 +406,7 @@ export const InvoiceForm: React.FC = () => {
 
         {/* Totals Section */}
         <div className="flex justify-end">
-           <div className="w-full lg:w-3/12 card p-8 rounded-2xl shadow-xl bg-gray-50/50 dark:bg-dark-900 border border-gray-100 dark:border-dark-800 space-y-4">
+           <div className="w-full lg:w-4/12 card p-5 md:p-8 rounded-2xl shadow-xl bg-gray-50/50 dark:bg-dark-900 border border-gray-100 dark:border-dark-800 space-y-4">
               <div className="space-y-3">
                   <div className="flex justify-between items-center text-xs">
                     <span className="font-bold text-gray-500 uppercase tracking-widest">Subtotal</span>
@@ -390,6 +416,7 @@ export const InvoiceForm: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Discount (₹)</span>
                     <input 
+                      data-field-order="1000000"
                       type="number" 
                       {...register('discount', { valueAsNumber: true })} 
                       className="w-20 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-1 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
@@ -399,6 +426,7 @@ export const InvoiceForm: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">GST (%)</span>
                     <input 
+                      data-field-order="1000001"
                       type="number" 
                       {...register('gstPercent', { valueAsNumber: true })} 
                       className="w-20 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-1 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
@@ -423,20 +451,31 @@ export const InvoiceForm: React.FC = () => {
         </div>
 
         {/* Form Actions */}
-        <div className="flex justify-end gap-4 mt-8">
-          <button type="button" onClick={() => navigate(-1)} className="px-10 py-3 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold text-xs uppercase tracking-widest transition-all">
+        <div className="flex flex-col-reverse md:flex-row justify-end gap-3 mt-8">
+          <button type="button" onClick={() => navigate(-1)} className="w-full md:w-auto px-10 py-3 md:py-3.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold text-xs md:text-sm uppercase tracking-widest transition-all min-h-[52px]">
             Cancel
           </button>
           <button 
              type="submit" 
              disabled={createMutation.isPending || updateMutation.isPending}
-             className="bg-[#B8860B] hover:bg-[#8B6508] text-white px-10 py-3 rounded-lg font-bold uppercase tracking-widest text-xs flex items-center gap-2 shadow-lg shadow-[#B8860B]/20 transition-all"
+             className="w-full md:w-auto justify-center bg-[#B8860B] hover:bg-[#8B6508] text-white px-10 py-3 md:py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs md:text-sm flex items-center gap-2 shadow-lg shadow-[#B8860B]/20 transition-all min-h-[52px]"
           >
             {createMutation.isPending || updateMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
             {isEditing ? 'Update Invoice' : 'Save Invoice'}
           </button>
         </div>
       </form>
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={handleConfirmSave}
+        title={isEditing ? 'Update Invoice' : 'Save Invoice'}
+        message={isEditing ? 'Are you sure you want to update this invoice? This will override existing records.' : 'Are you sure you want to save and generate this invoice?'}
+        confirmText={isEditing ? 'Update' : 'Save'}
+        cancelText="Cancel"
+      />
     </div>
   );
 };

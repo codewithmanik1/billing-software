@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 import { Pagination } from '../../components/ui/Pagination';
 import mjLogo from '../../assets/mj_logo.png';
 import { useProfile } from '../../context/ProfileContext';
+import { useEnterKeyNavigation } from '../../lib/useEnterKeyNavigation';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 // Convert image to base64 for reliable print rendering
 const getBase64Logo = (): Promise<string> => {
@@ -53,6 +55,8 @@ export const InvoiceDetail: React.FC = () => {
   const currentTab = searchParams.get('tab') || 'details';
   
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isPayConfirmOpen, setIsPayConfirmOpen] = useState(false);
+  const [pendingPaymentData, setPendingPaymentData] = useState<PaymentFormData | null>(null);
   const [isDeletePaymentOpen, setIsDeletePaymentOpen] = useState(false);
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
   const [payPage, setPayPage] = useState(1);
@@ -60,6 +64,14 @@ export const InvoiceDetail: React.FC = () => {
   const { profile } = useProfile();
   const [base64Logo, setBase64Logo] = useState<string>(mjLogo);
   const printRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEnterKeyNavigation(formRef, () => {
+    handleSubmit((data) => {
+      setPendingPaymentData(data);
+      setIsPayConfirmOpen(true);
+    })();
+  });
 
   useEffect(() => {
     getBase64Logo().then(setBase64Logo);
@@ -149,11 +161,18 @@ export const InvoiceDetail: React.FC = () => {
   };
 
   const onPaymentSubmit = (data: PaymentFormData) => {
-    if (data.amount > Number(invoice.balanceDue)) {
-      toast.error(`Payment exceeds pending balance of ${formatCurrency(Number(invoice.balanceDue))}`);
-      return;
+    setPendingPaymentData(data);
+    setIsPayConfirmOpen(true);
+  };
+
+  const handleConfirmPayment = () => {
+    if (pendingPaymentData) {
+      if (pendingPaymentData.amount > Number(invoice.balanceDue)) {
+        toast.error(`Payment exceeds pending balance of ${formatCurrency(Number(invoice.balanceDue))}`);
+        return;
+      }
+      addPaymentMutation.mutate(pendingPaymentData);
     }
-    addPaymentMutation.mutate(data);
   };
 
   const handleDeletePayment = () => {
@@ -249,10 +268,10 @@ export const InvoiceDetail: React.FC = () => {
       </div>
 
       {currentTab === 'details' ? (
-        <div id="printable-invoice" ref={printRef} className="card p-10 print:shadow-none print:border-none print:p-0 bg-white text-gray-900 border-gray-100 shadow-xl rounded-2xl">
+        <div id="printable-invoice" ref={printRef} className="card p-4 sm:p-10 print:shadow-none print:border-none print:p-0 bg-white text-gray-900 border-gray-100 shadow-xl rounded-2xl w-full">
           {/* Printable Invoice Header */}
-          <div className="flex justify-between items-start mb-10 pb-8 border-b-2 border-[#B8860B]">
-            <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start mb-6 sm:mb-10 pb-6 sm:pb-8 border-b-2 border-[#B8860B] gap-6 sm:gap-0">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left w-full sm:w-auto">
               <img
                 src={base64Logo}
                 alt={profile.name}
@@ -270,8 +289,8 @@ export const InvoiceDetail: React.FC = () => {
               </div>
             </div>
 
-            <div className="text-right">
-              <div className="bg-[#B8860B] text-white px-6 py-2 rounded-lg inline-block font-bold uppercase tracking-[0.3em] text-sm mb-4">Tax Invoice</div>
+            <div className="text-center sm:text-right w-full sm:w-auto">
+              <div className="bg-[#B8860B] text-white px-4 sm:px-6 py-2 rounded-lg inline-block font-bold uppercase tracking-[0.3em] text-xs sm:text-sm mb-4">Tax Invoice</div>
               <div className="space-y-1">
                  <p className="text-[#1A1209] text-xl font-bold font-mono">{invoice.invoiceNumber}</p>
                  <p className="text-[#6B5E4A] text-[10px] font-bold uppercase tracking-wider">Dated: {format(new Date(invoice.invoiceDate), 'dd MMMM yyyy')}</p>
@@ -284,7 +303,7 @@ export const InvoiceDetail: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-10 mb-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10 mb-6 sm:mb-10">
             <div className="p-6 bg-gray-50/50 rounded-2xl border border-gray-100">
                <h3 className="text-[10px] font-bold text-[#B8860B] mb-4 uppercase tracking-[0.2em] pl-1 border-l-2 border-[#B8860B]">Billing Recipient</h3>
                <p className="font-bold text-xl text-[#1A1209]">{customer.name}</p>
@@ -294,14 +313,14 @@ export const InvoiceDetail: React.FC = () => {
                </div>
             </div>
             
-            <div className="flex flex-col justify-end items-end p-6 border border-gray-100 rounded-2xl">
+            <div className="flex flex-col justify-end items-center sm:items-end p-6 border border-gray-100 rounded-2xl text-center sm:text-right">
                <p className="text-[10px] font-bold text-[#9A9A8A] uppercase tracking-widest mb-1">Total Valuation</p>
                <p className="text-3xl font-bold text-[#1A1209]">{formatCurrency(Number(invoice.grandTotal))}</p>
             </div>
           </div>
 
-          <div className="mb-10 overflow-hidden rounded-2xl border border-gray-100">
-            <table className="w-full text-sm text-left">
+          <div className="mb-6 sm:mb-10 overflow-x-auto rounded-2xl border border-gray-100 shadow-sm">
+            <table className="w-full text-sm text-left whitespace-nowrap sm:whitespace-normal min-w-[600px]">
               <thead className="bg-[#B8860B] text-white">
                 <tr>
                   <th className="px-6 py-4 font-bold uppercase tracking-widest text-[10px]">Description of Ornament</th>
@@ -360,7 +379,7 @@ export const InvoiceDetail: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10">
             <div className="space-y-6">
                {invoice.notes && (
                  <div className="p-4 bg-gray-50 rounded-xl border-l-4 border-[#B8860B]">
@@ -393,32 +412,34 @@ export const InvoiceDetail: React.FC = () => {
         </div>
       ) : (
         <div className="card p-0 flex flex-col shadow-lg border-gray-100 rounded-2xl overflow-hidden">
-           <div className="p-8 border-b border-gray-100 dark:border-dark-800 flex justify-between items-center bg-gray-50/50 dark:bg-black/10">
-             <div>
-                <h2 className="text-2xl font-serif text-[#1A1209] dark:text-[#F5F5F0]">Ledger Overview</h2>
-                <div className="flex items-center gap-4 mt-2">
-                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Aggregate Collected:</p>
-                   <p className="text-lg font-bold text-green-600 font-mono tracking-tight">{formatCurrency(Number(invoice.totalPaid))}</p>
-                </div>
-             </div>
-             {Number(invoice.balanceDue) > 0 && (
-                <div className="text-right">
-                   <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-1 font-mono">Pending Balance</p>
-                   <p className="text-2xl font-bold text-red-500 tracking-tight">{formatCurrency(Number(invoice.balanceDue))}</p>
-                </div>
-             )}
+           <div className="p-8 border-b border-gray-100 dark:border-dark-800 bg-gray-50/50 dark:bg-black/10">
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0 mb-8 sm:mb-10">
+            <div>
+              <h2 className="text-xl sm:text-2xl font-serif text-[#1A1209] dark:text-[#F5F5F0]">Ledger Overview</h2>
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-10 w-full sm:w-auto">
+               <div className="flex justify-between items-center sm:block">
+                  <p className="text-[10px] font-bold text-[#9A9A8A] uppercase tracking-[0.2em] mb-0 sm:mb-1">Aggregate Collected:</p>
+                  <p className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-500 font-mono">{formatCurrency(Number(invoice.totalPaid))}</p>
+               </div>
+               <div className="flex justify-between items-center sm:block">
+                  <p className="text-[10px] font-bold text-red-400 dark:text-red-500/80 uppercase tracking-[0.2em] mb-0 sm:mb-1">Pending Balance:</p>
+                  <p className="text-xl sm:text-2xl font-bold text-red-500 font-mono">{formatCurrency(Number(invoice.balanceDue))}</p>
+               </div>
+            </div>
+          </div>
            </div>
 
-           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+           <div className="overflow-x-auto -mx-6 px-6">
+            <table className="w-full text-left text-sm whitespace-nowrap min-w-[500px]">
               <thead className="bg-[#B8860B] text-white">
                 <tr>
-                  <th className="px-8 py-5 font-bold uppercase tracking-widest text-[10px]">Payment Date</th>
-                  <th className="px-6 py-5 font-bold uppercase tracking-widest text-[10px]">Method</th>
-                  <th className="px-6 py-5 font-bold uppercase tracking-widest text-[10px]">Reference</th>
-                  <th className="px-6 py-5 font-bold uppercase tracking-widest text-[10px] text-right">Credit</th>
-                  <th className="px-6 py-5 font-bold uppercase tracking-widest text-[10px] text-right">Balance Due</th>
-                  <th className="px-8 py-5 font-bold uppercase tracking-widest text-[10px] text-center">Actions</th>
+                  <th className="px-6 sm:px-8 py-5 font-bold uppercase tracking-widest text-[10px] min-w-[120px]">Payment Date</th>
+                  <th className="px-4 sm:px-6 py-5 font-bold uppercase tracking-widest text-[10px] min-w-[90px]">Method</th>
+                  <th className="px-4 sm:px-6 py-5 font-bold uppercase tracking-widest text-[10px] min-w-[110px]">Reference</th>
+                  <th className="px-4 sm:px-6 py-5 font-bold uppercase tracking-widest text-[10px] text-right min-w-[110px]">Credit</th>
+                  <th className="px-4 sm:px-6 py-5 font-bold uppercase tracking-widest text-[10px] text-right">Balance Due</th>
+                  <th className="px-6 sm:px-8 py-5 font-bold uppercase tracking-widest text-[10px] text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
@@ -443,7 +464,7 @@ export const InvoiceDetail: React.FC = () => {
                               setDeletingPaymentId(p.id);
                               setIsDeletePaymentOpen(true);
                             }}
-                            className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
+                            className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
                             title="Delete Payment"
                             aria-label="Delete Payment"
                           >
@@ -455,13 +476,13 @@ export const InvoiceDetail: React.FC = () => {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="px-8 py-24 text-center">
-                       <div className="flex flex-col items-center justify-center">
-                         <div className="p-6 bg-gray-50 dark:bg-dark-800 rounded-full mb-4">
+                    <td colSpan={6} className="px-6 sm:px-8 py-16 sm:py-24 text-center">
+                       <div className="flex flex-col items-center justify-center w-full max-w-sm mx-auto px-4">
+                         <div className="p-6 bg-gray-50 dark:bg-dark-800 rounded-full mb-6">
                             <IndianRupee size={48} className="text-gray-200" />
                          </div>
-                         <p className="font-serif italic text-gray-400 text-lg">No collections have been recorded</p>
-                         <p className="text-xs text-gray-400 uppercase tracking-widest mt-1">Settle account by recording a payment</p>
+                         <p className="font-serif italic text-gray-500 dark:text-gray-400 text-base sm:text-lg mb-2 leading-relaxed">No collections have been recorded yet</p>
+                         <p className="text-[10px] sm:text-xs text-gray-400 uppercase tracking-[0.2em] font-bold leading-normal">Settle account by recording a receipt</p>
                        </div>
                     </td>
                   </tr>
@@ -513,11 +534,11 @@ export const InvoiceDetail: React.FC = () => {
 
       {/* Payment Modal */}
       <Modal isOpen={isPaymentModalOpen} onClose={() => setIsPaymentModalOpen(false)} title="Record Collection">
-        <form onSubmit={handleSubmit(onPaymentSubmit)} className="space-y-6 pt-2">
+        <form ref={formRef} onSubmit={handleSubmit(onPaymentSubmit)} className="space-y-6 pt-2">
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider">Payment Date <span className="text-red-500">*</span></label>
-              <input type="date" {...register('paymentDate')} className="input-field py-3" />
+              <input data-field-order="1" type="date" {...register('paymentDate')} className="input-field py-3" />
               {errors.paymentDate && <p className="text-red-500 text-[10px] font-bold">{errors.paymentDate.message}</p>}
             </div>
             <div className="space-y-1.5">
@@ -525,7 +546,7 @@ export const InvoiceDetail: React.FC = () => {
                 <span>Credit Amount <span className="text-red-500">*</span></span>
                 <span className="text-[#B8860B]">Balance: {formatCurrency(Number(invoice.balanceDue))}</span>
               </label>
-              <input type="number" step="0.01" {...register('amount', { valueAsNumber: true })} className="input-field text-right py-3 font-mono font-bold text-lg" placeholder="0.00" />
+              <input data-field-order="2" type="number" step="0.01" {...register('amount', { valueAsNumber: true })} className="input-field text-right py-3 font-mono font-bold text-lg" placeholder="0.00" />
               {errors.amount && <p className="text-red-500 text-[10px] font-bold">{errors.amount.message}</p>}
             </div>
           </div>
@@ -533,7 +554,7 @@ export const InvoiceDetail: React.FC = () => {
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider">Payment Instrument <span className="text-red-500">*</span></label>
-              <select {...register('paymentMode')} className="input-field py-3 font-medium">
+              <select data-field-order="3" {...register('paymentMode')} className="input-field py-3 font-medium">
                 <option value="CASH">Cash Payment</option>
                 <option value="UPI">UPI Transfer</option>
                 <option value="CARD">Debit/Credit Card</option>
@@ -544,13 +565,13 @@ export const InvoiceDetail: React.FC = () => {
             </div>
             <div className="space-y-1.5">
               <label className="block text-xs font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider">Reference / TID</label>
-              <input type="text" {...register('referenceNumber')} className="input-field py-3 font-mono text-xs uppercase" placeholder="TXN-123456789" />
+              <input data-field-order="4" type="text" {...register('referenceNumber')} className="input-field py-3 font-mono text-xs uppercase" placeholder="TXN-123456789" />
             </div>
           </div>
           
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider">Payment Remarks</label>
-            <textarea {...register('notes')} className="input-field min-h-[80px] py-3 text-sm italic" placeholder="Add optional payment details..." />
+            <textarea data-field-order="5" {...register('notes')} className="input-field min-h-[80px] py-3 text-sm italic" placeholder="Add optional payment details..." />
           </div>
 
           <div className="flex justify-end gap-4 pt-6 mt-4 border-t border-gray-100 dark:border-dark-800">
@@ -566,6 +587,17 @@ export const InvoiceDetail: React.FC = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Add ConfirmDialog for the Record Collection form */}
+      <ConfirmDialog
+        isOpen={isPayConfirmOpen}
+        onClose={() => setIsPayConfirmOpen(false)}
+        onConfirm={handleConfirmPayment}
+        title="Confirm Collection"
+        message="Are you sure you want to record this payment into the system? The invoice balance will be permanently updated."
+        confirmText="Confirm"
+        cancelText="Discard"
+      />
 
     </div>
   );

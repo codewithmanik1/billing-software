@@ -7,9 +7,9 @@ import { successResponse, errorResponse } from '../utils/apiResponse';
 const customerSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   phone: z.string().min(10, 'Valid phone number is required'),
-  email: z.string().email().optional().nullable(),
-  address: z.string().optional().nullable(),
-  gstin: z.string().optional().nullable(),
+  email: z.preprocess((val) => val === '' ? null : val, z.string().email().optional().nullable()),
+  address: z.preprocess((val) => val === '' ? null : val, z.string().optional().nullable()),
+  gstin: z.preprocess((val) => val === '' ? null : val, z.string().optional().nullable()),
 });
 
 export const getAllCustomers = async (req: Request, res: Response) => {

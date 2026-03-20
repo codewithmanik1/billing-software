@@ -25,15 +25,15 @@ html {
 
 @layer components {
   .btn-primary {
-    @apply bg-gold text-dark-900 font-medium px-4 py-2 rounded-md hover:bg-gold-light transition-colors focus:ring-2 focus:ring-gold disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-gold text-dark-900 font-medium px-4 py-2 rounded-md hover:bg-gold-light transition-colors focus:ring-2 focus:ring-gold disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px];
   }
   
   .btn-secondary {
-    @apply bg-[#F5F0E8] dark:bg-dark-700 text-[#1A1209] dark:text-gray-200 font-medium px-4 py-2 rounded-md hover:bg-[#E8E0D0] dark:hover:bg-dark-600 transition-colors border border-[#E8E0D0] dark:border-dark-700;
+    @apply bg-[#F5F0E8] dark:bg-dark-700 text-[#1A1209] dark:text-gray-200 font-medium px-4 py-2 rounded-md hover:bg-[#E8E0D0] dark:hover:bg-dark-600 transition-colors border border-[#E8E0D0] dark:border-dark-700 min-h-[44px];
   }
   
   .input-field {
-    @apply w-full bg-white dark:bg-[#1A1A1A] border border-[#E8E0D0] dark:border-[#2E2E2E] rounded-md px-3 py-2 text-[#1A1209] dark:text-[#F5F5F0] placeholder-[#6B5E4A] dark:placeholder-[#9A9A8A] focus:outline-none focus:ring-2 focus:ring-[#B8860B] focus:border-transparent transition-all;
+    @apply w-full bg-white dark:bg-[#1A1A1A] border border-[#E8E0D0] dark:border-[#2E2E2E] rounded-md px-3 py-2 text-[#1A1209] dark:text-[#F5F5F0] placeholder-[#6B5E4A] dark:placeholder-[#9A9A8A] focus:outline-none focus:ring-2 focus:ring-[#B8860B] focus:border-transparent transition-all min-h-[44px];
   }
   
   .card {

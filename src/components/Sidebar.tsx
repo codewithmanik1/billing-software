@@ -98,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle, mobileO
             style={{ background: '#FBF0E4', padding: '2px' }}
           />
           <div className="flex flex-col leading-tight min-w-0 flex-1">
-            <span className="text-[#FFD700] font-bold text-lg uppercase truncate">
+            <span className="text-[#FFD700] font-bold text-[15px] xl:text-base uppercase line-clamp-2 leading-tight break-words pr-1">
               {profile.name}
             </span>
             <span className="text-[#9A9A8A] text-xs uppercase truncate">
