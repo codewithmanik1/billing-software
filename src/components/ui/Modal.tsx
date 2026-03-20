@@ -25,18 +25,18 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
         </Transition.Child>
 
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full items-center justify-center p-4 text-center">
+        <div className="fixed inset-0 overflow-y-auto z-50">
+          <div className="flex min-h-[100dvh] items-end justify-center p-0 text-center sm:items-center sm:p-4">
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
+              enterFrom="opacity-0 translate-y-full sm:translate-y-0 sm:scale-95"
+              enterTo="opacity-100 translate-y-0 sm:scale-100"
               leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
+              leaveFrom="opacity-100 translate-y-0 sm:scale-100"
+              leaveTo="opacity-0 translate-y-full sm:translate-y-0 sm:scale-95"
             >
-              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 p-6 text-left align-middle shadow-xl transition-all">
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-t-3xl sm:rounded-2xl bg-white dark:bg-dark-800 border-t sm:border sm:border-gray-200 dark:border-dark-700 p-6 text-left align-middle shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.3)] sm:shadow-xl transition-all">
                 <Dialog.Title as="div" className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-serif font-bold text-gray-900 dark:text-white tracking-wide">
                     {title}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { Search, Edit2, Trash2, Loader2, UserPlus, Phone, Mail } from 'lucide-react';
@@ -8,6 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { toast } from 'sonner';
 import { Pagination } from '../components/ui/Pagination';
+import { useEnterKeyNavigation } from '../lib/useEnterKeyNavigation';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 const customerSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -27,12 +29,22 @@ export const Customers: React.FC = () => {
   
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingData, setPendingData] = useState<CustomerFormData | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Record<string, unknown> | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema)
+  });
+
+  const formRef = useRef<HTMLFormElement>(null);
+  useEnterKeyNavigation(formRef, () => {
+    handleSubmit((data) => {
+      setPendingData(data);
+      setIsConfirmOpen(true);
+    })();
   });
 
   // Fetching data
@@ -101,10 +113,17 @@ export const Customers: React.FC = () => {
   };
 
   const onFormSubmit = (data: CustomerFormData) => {
-    if (editingCustomer) {
-      updateMutation.mutate({ id: editingCustomer.id as string, body: data });
-    } else {
-      createMutation.mutate(data);
+    setPendingData(data);
+    setIsConfirmOpen(true);
+  };
+
+  const handleConfirmSave = () => {
+    if (pendingData) {
+      if (editingCustomer) {
+        updateMutation.mutate({ id: editingCustomer.id as string, body: pendingData });
+      } else {
+        createMutation.mutate(pendingData);
+      }
     }
   };
 
@@ -256,16 +275,16 @@ export const Customers: React.FC = () => {
 
       {/* Form Modal */}
       <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingCustomer ? 'Edit Customer' : 'Add New Customer'}>
-        <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-5 p-2">
+        <form ref={formRef} onSubmit={handleSubmit(onFormSubmit)} className="space-y-5 p-2">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1.5">
               <label className="block text-sm font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider text-[10px]">Client Name <span className="text-red-500">*</span></label>
-              <input {...register('name')} className="input-field py-3 text-base" placeholder="Enter full name" />
+              <input data-field-order="1" {...register('name')} className="input-field py-3 text-base" placeholder="Enter full name" />
               {errors.name && <p className="text-red-500 text-[10px] uppercase font-bold mt-1">{errors.name.message}</p>}
             </div>
             <div className="space-y-1.5">
               <label className="block text-sm font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider text-[10px]">Phone Number <span className="text-red-500">*</span></label>
-              <input {...register('phone')} className="input-field py-3 text-base" placeholder="10-digit mobile" />
+              <input data-field-order="2" {...register('phone')} className="input-field py-3 text-base" placeholder="10-digit mobile" />
               {errors.phone && <p className="text-red-500 text-[10px] uppercase font-bold mt-1">{errors.phone.message}</p>}
             </div>
           </div>
@@ -273,18 +292,18 @@ export const Customers: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div className="space-y-1.5">
               <label className="block text-sm font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider text-[10px]">Email Address</label>
-              <input {...register('email')} type="email" className="input-field py-3" placeholder="client@example.com" />
+              <input data-field-order="3" {...register('email')} type="email" className="input-field py-3" placeholder="client@example.com" />
               {errors.email && <p className="text-red-500 text-[10px] uppercase font-bold mt-1">{errors.email.message}</p>}
             </div>
             <div className="space-y-1.5">
               <label className="block text-sm font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider text-[10px]">GSTIN (Optional)</label>
-              <input {...register('gstin')} className="input-field py-3 uppercase" placeholder="22AAAAA0000A1Z5" />
+              <input data-field-order="4" {...register('gstin')} className="input-field py-3 uppercase" placeholder="22AAAAA0000A1Z5" />
             </div>
           </div>
           
           <div className="space-y-1.5">
             <label className="block text-sm font-bold text-[#6B5E4A] dark:text-[#F5F5F0] uppercase tracking-wider text-[10px]">Postal Address</label>
-            <textarea {...register('address')} className="input-field min-h-[100px] py-3 text-sm" placeholder="Full residential or business address" />
+            <textarea data-field-order="5" {...register('address')} className="input-field min-h-[100px] py-3 text-sm" placeholder="Full residential or business address" />
           </div>
 
           <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-gray-100 dark:border-dark-800">
@@ -327,6 +346,17 @@ export const Customers: React.FC = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={isConfirmOpen}
+        onClose={() => setIsConfirmOpen(false)}
+        onConfirm={handleConfirmSave}
+        title={editingCustomer ? 'Update Client' : 'Save Client'}
+        message={editingCustomer ? 'Are you sure you want to update this client profile?' : 'Are you sure you want to save this new client profile to the system?'}
+        confirmText={editingCustomer ? 'Update' : 'Save'}
+        cancelText="Discard"
+      />
     </div>
   );
 };

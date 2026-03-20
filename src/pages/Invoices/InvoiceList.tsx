@@ -121,9 +121,9 @@ export const InvoiceList: React.FC = () => {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#F5F0E8] dark:bg-[#0A0A0A] border-b border-[#E8E0D0] dark:border-[#2E2E2E] text-[#6B5E4A] dark:text-[#9A9A8A]">
+        <div className="overflow-x-auto md:overflow-visible">
+          <table className="w-full text-left text-sm max-md:block">
+            <thead className="bg-[#F5F0E8] dark:bg-[#0A0A0A] border-b border-[#E8E0D0] dark:border-[#2E2E2E] text-[#6B5E4A] dark:text-[#9A9A8A] max-md:hidden">
               <tr>
                 <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Invoice Details</th>
                 <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Customer & Contact</th>
@@ -132,7 +132,7 @@ export const InvoiceList: React.FC = () => {
                 <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px] text-center">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
+            <tbody className="divide-y divide-gray-100 dark:divide-dark-800 max-md:block">
               {isLoading ? (
                 <tr>
                    <td colSpan={5} className="px-6 py-20 text-center">
@@ -144,48 +144,66 @@ export const InvoiceList: React.FC = () => {
                 </tr>
               ) : invoices.length > 0 ? (
                 invoices.map((inv: Record<string, unknown> & { id: string; invoiceNumber: string; invoiceDate: string; customer: { name: string; phone: string }; grandTotal: number; totalPaid: number; balanceDue: number; status: string }) => (
-                  <tr key={inv.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 group">
-                    <td className="px-6 py-5">
-                       <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-base group-hover:text-[#B8860B] transition-colors">{inv.invoiceNumber}</div>
-                       <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mt-1 font-medium italic">
-                          <Calendar size={12} />
-                          {format(new Date(inv.invoiceDate), 'dd MMM yyyy')}
+                  <tr key={inv.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 group max-md:block max-md:p-4 max-md:border-b border-gray-100 dark:border-dark-800 relative">
+                    <td className="px-6 py-5 max-md:p-0 max-md:block max-md:border-b border-gray-50 dark:border-dark-800 max-md:pb-3 max-md:mb-3">
+                       <div className="flex max-md:justify-between max-md:items-start md:block">
+                         <span className="md:hidden font-bold text-[10px] text-gray-500 uppercase tracking-widest mt-1">Invoice</span>
+                         <div className="text-right md:text-left">
+                           <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-base group-hover:text-[#B8860B] transition-colors">{inv.invoiceNumber}</div>
+                           <div className="flex items-center gap-1.5 text-[11px] text-gray-400 mt-1 font-medium italic justify-end md:justify-start">
+                              <Calendar size={12} />
+                              {format(new Date(inv.invoiceDate), 'dd MMM yyyy')}
+                           </div>
+                         </div>
                        </div>
                     </td>
-                    <td className="px-6 py-5 font-medium">
-                       <div className="flex items-center gap-2 text-[#1A1209] dark:text-[#F5F5F0]">
-                          <User size={14} className="text-[#B8860B]" />
-                          <span>{inv.customer.name}</span>
+                    <td className="px-6 py-5 font-medium max-md:p-0 max-md:block max-md:border-b border-gray-50 dark:border-dark-800 max-md:pb-3 max-md:mb-3">
+                       <div className="flex max-md:justify-between max-md:items-start md:block">
+                         <span className="md:hidden font-bold text-[10px] text-gray-500 uppercase tracking-widest mt-1">Customer</span>
+                         <div className="text-right md:text-left">
+                           <div className="flex items-center gap-2 text-[#1A1209] dark:text-[#F5F5F0] justify-end md:justify-start">
+                              <User size={14} className="text-[#B8860B]" />
+                              <span>{inv.customer.name}</span>
+                           </div>
+                           <div className="text-[10px] text-gray-400 mt-1 pl-0 md:pl-5">{inv.customer.phone}</div>
+                         </div>
                        </div>
-                       <div className="text-[10px] text-gray-400 mt-1 pl-5">{inv.customer.phone}</div>
                     </td>
-                    <td className="px-6 py-5 text-right">
-                       <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-lg">{formatCurrency(Number(inv.grandTotal))}</div>
-                       {Number(inv.totalPaid) > 0 && (
-                          <div className="text-[10px] text-green-600 dark:text-green-500 font-bold mt-0.5">
-                             Paid: {formatCurrency(Number(inv.totalPaid))}
-                          </div>
-                       )}
-                       {Number(inv.balanceDue) > 0 && (
-                          <div className="text-[10px] text-red-500 font-bold mt-0.5">
-                             Due: {formatCurrency(Number(inv.balanceDue))}
-                          </div>
-                       )}
+                    <td className="px-6 py-5 text-right max-md:p-0 max-md:block max-md:border-b border-gray-50 dark:border-dark-800 max-md:pb-3 max-md:mb-3">
+                       <div className="flex max-md:justify-between max-md:items-center md:block">
+                         <span className="md:hidden font-bold text-[10px] text-gray-500 uppercase tracking-widest">Financials</span>
+                         <div className="text-right">
+                           <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-lg">{formatCurrency(Number(inv.grandTotal))}</div>
+                           {Number(inv.totalPaid) > 0 && (
+                              <div className="text-[10px] text-green-600 dark:text-green-500 font-bold mt-0.5">
+                                 Paid: {formatCurrency(Number(inv.totalPaid))}
+                              </div>
+                           )}
+                           {Number(inv.balanceDue) > 0 && (
+                              <div className="text-[10px] text-red-500 font-bold mt-0.5">
+                                 Due: {formatCurrency(Number(inv.balanceDue))}
+                              </div>
+                           )}
+                         </div>
+                       </div>
                     </td>
-                    <td className="px-6 py-5 text-center">
-                       <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest ${
-                         inv.status === 'PAID' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
-                         inv.status === 'PARTIAL' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
-                         'bg-red-500/10 text-red-600 dark:text-red-400'
-                       }`}>
-                         {inv.status}
-                       </span>
+                    <td className="px-6 py-5 text-center max-md:p-0 max-md:block max-md:border-b border-gray-50 dark:border-dark-800 max-md:pb-3 max-md:mb-3">
+                       <div className="flex max-md:justify-between max-md:items-center md:block">
+                         <span className="md:hidden font-bold text-[10px] text-gray-500 uppercase tracking-widest">Status</span>
+                         <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest inline-block ${
+                           inv.status === 'PAID' ? 'bg-green-500/10 text-green-600 dark:text-green-400' :
+                           inv.status === 'PARTIAL' ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' :
+                           'bg-red-500/10 text-red-600 dark:text-red-400'
+                         }`}>
+                           {inv.status}
+                         </span>
+                       </div>
                     </td>
-                    <td className="px-6 py-5">
-                      <div className="flex justify-center gap-2">
+                     <td className="px-6 py-5 max-md:p-0 max-md:block">
+                      <div className="flex justify-center md:justify-end gap-3 sm:gap-2 max-md:pt-4 max-md:pb-2 max-md:border-t border-gray-50 dark:border-dark-800">
                         <button 
                           onClick={() => navigate(`/invoices/${inv.id}`)}
-                          className="p-2.5 text-gray-400 hover:text-blue-500 transition-colors rounded-xl hover:bg-blue-500/10"
+                          className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-blue-500 transition-colors rounded-xl hover:bg-blue-500/10"
                           title="View Insights"
                           aria-label="View invoice details"
                         >
@@ -193,7 +211,7 @@ export const InvoiceList: React.FC = () => {
                         </button>
                         <button
                           onClick={() => navigate(`/invoices/${inv.id}?tab=payments`)}
-                          className="p-2.5 text-gray-400 hover:text-green-500 transition-colors rounded-xl hover:bg-green-500/10"
+                          className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-green-500 transition-colors rounded-xl hover:bg-green-500/10"
                           title="Register Payment"
                           aria-label="Register payment"
                         >
@@ -201,15 +219,15 @@ export const InvoiceList: React.FC = () => {
                         </button>
                         <button
                           onClick={() => navigate(`/invoices/${inv.id}/edit`)}
-                          className="p-2.5 text-gray-400 hover:text-[#B8860B] transition-colors rounded-xl hover:bg-[#B8860B]/10"
+                          className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-[#B8860B] transition-colors rounded-xl hover:bg-[#B8860B]/10"
                           title="Amend Record"
                           aria-label="Edit invoice"
                         >
                           <Edit2 size={18} />
                         </button>
                         <button
-                          onClick={() => { setDeletingId(inv.id); setIsDeleteOpen(true); }}
-                          className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
+                          onClick={(e) => { e.stopPropagation(); setDeletingId(inv.id); setIsDeleteOpen(true); }}
+                          className="p-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
                           title="Void Invoice"
                           aria-label="Delete invoice"
                         >

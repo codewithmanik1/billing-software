@@ -85,16 +85,16 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         {kpiCards.map(({ label, value, icon: Icon, borderColor, iconColor }) => (
-          <div key={label} className={`card p-6 border-l-4 ${borderColor}`}>
-            <div className="flex items-center gap-4 mb-2">
+          <div key={label} className={`card p-4 md:p-6 border-l-4 ${borderColor}`}>
+            <div className="flex items-center gap-2 md:gap-4 mb-2">
               <div className={`p-2 bg-gray-100 dark:bg-dark-800 rounded-lg ${iconColor}`}>
-                <Icon size={20} />
+                <Icon size={16} className="md:w-5 md:h-5" />
               </div>
-              <h3 className="text-gray-500 dark:text-gray-400 font-medium text-sm">{label}</h3>
+              <h3 className="text-gray-500 dark:text-gray-400 font-medium text-[10px] md:text-sm uppercase md:normal-case tracking-wider md:tracking-normal">{label}</h3>
             </div>
-            <p className="text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">{value}</p>
+            <p className="text-xl md:text-3xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">{value}</p>
           </div>
         ))}
       </div>
