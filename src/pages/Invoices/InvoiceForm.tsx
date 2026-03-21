@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, Plus, Save, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2, Loader2, IndianRupee } from 'lucide-react';
 import { toast } from 'sonner';
 import { Combobox } from '@headlessui/react';
 import { format } from 'date-fns';
@@ -13,6 +13,8 @@ import mjLogo from '../../assets/mj_logo.png';
 import { useProfile } from '../../context/ProfileContext';
 import { useEnterKeyNavigation } from '../../lib/useEnterKeyNavigation';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
+import { RecordCollectionModal } from '../../components/RecordCollectionModal';
+import type { PaymentFormData } from '../../components/RecordCollectionModal';
 
 const invoiceItemSchema = z.object({
   id: z.string().optional(),
@@ -49,6 +51,8 @@ export const InvoiceForm: React.FC = () => {
   const { profile } = useProfile();
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingData, setPendingData] = useState<InvoiceFormData | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentData, setPaymentData] = useState<PaymentFormData | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -148,13 +152,36 @@ export const InvoiceForm: React.FC = () => {
   const gstAmount = (amountAfterDiscount * Number(watchGstPercent)) / 100;
   const grandTotal = amountAfterDiscount + gstAmount;
 
+  // Auto-update payment amount when grandTotal changes
+  useEffect(() => {
+    if (paymentData) {
+      setPaymentData(prev => prev ? { ...prev, amount: grandTotal } : null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grandTotal]);
+
   // Mutations
   const createMutation = useMutation({
     mutationFn: (data: InvoiceFormData) => api.post('/invoices', data),
-    onSuccess: () => {
+    retry: false,
+    onSuccess: async (res) => {
+      const newInvoiceId = res.data?.data?.id;
+
+      // If payment data was filled, call the record collection API after invoice is created
+      if (paymentData && newInvoiceId) {
+        try {
+          await api.post('/payments', { ...paymentData, invoiceId: newInvoiceId });
+          toast.success('Invoice generated & payment recorded successfully');
+        } catch {
+          toast.error('Invoice saved but payment recording failed. You can record payment from the invoice detail page.');
+        }
+      } else {
+        toast.success('Invoice generated successfully');
+      }
+
+      setPaymentData(null);
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      toast.success('Invoice generated successfully');
       navigate('/invoices');
     },
     onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to create invoice'),
@@ -178,6 +205,11 @@ export const InvoiceForm: React.FC = () => {
 
   const handleConfirmSave = () => {
     if (pendingData) {
+      // Validate payment amount doesn't exceed invoice total
+      if (paymentData && paymentData.amount > grandTotal) {
+        toast.error(`Payment amount (₹${formatCurrency(paymentData.amount)}) exceeds invoice total (₹${formatCurrency(grandTotal)}). Please correct the payment details.`);
+        return;
+      }
       if (isEditing) {
         updateMutation.mutate(pendingData);
       } else {
@@ -450,13 +482,71 @@ export const InvoiceForm: React.FC = () => {
            </div>
         </div>
 
+        {/* Record Collection Section (only for new invoices) */}
+        {!isEditing && (
+          <div className="flex justify-end">
+            <div className="w-full lg:w-4/12 card p-5 md:p-8 rounded-2xl shadow-xl bg-white dark:bg-dark-900 border border-gray-100 dark:border-dark-800 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest">Payment Collection</h2>
+                {paymentData && (
+                  <button
+                    type="button"
+                    onClick={() => setPaymentData(null)}
+                    className="text-red-400 hover:text-red-600 transition-colors"
+                    title="Remove payment"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+              {paymentData ? (
+                <div className="space-y-2 text-xs text-gray-600 dark:text-gray-400">
+                  <div className="flex justify-between">
+                    <span className="font-medium">Amount:</span>
+                    <span className="font-bold text-green-600 font-mono">₹{formatCurrency(paymentData.amount)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Mode:</span>
+                    <span className="font-bold">{paymentData.paymentMode}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="font-medium">Date:</span>
+                    <span className="font-bold">{format(new Date(paymentData.paymentDate), 'dd MMM yyyy')}</span>
+                  </div>
+                  {paymentData.referenceNumber && (
+                    <div className="flex justify-between">
+                      <span className="font-medium">Ref:</span>
+                      <span className="font-bold font-mono">{paymentData.referenceNumber}</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsPaymentModalOpen(true)}
+                    className="w-full mt-2 px-4 py-2 bg-gray-50 dark:bg-dark-800 hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold transition-all"
+                  >
+                    Edit Payment Details
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentModalOpen(true)}
+                  className="w-full px-4 py-3 bg-[#B8860B]/10 hover:bg-[#B8860B]/20 text-[#B8860B] rounded-xl text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 transition-all border border-[#B8860B]/20"
+                >
+                  <IndianRupee size={14} /> Record Collection
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Form Actions */}
         <div className="flex flex-col-reverse md:flex-row justify-end gap-3 mt-8">
           <button type="button" onClick={() => navigate(-1)} className="w-full md:w-auto px-10 py-3 md:py-3.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold text-xs md:text-sm uppercase tracking-widest transition-all min-h-[52px]">
             Cancel
           </button>
-          <button 
-             type="submit" 
+          <button
+             type="submit"
              disabled={createMutation.isPending || updateMutation.isPending}
              className="w-full md:w-auto justify-center bg-[#B8860B] hover:bg-[#8B6508] text-white px-10 py-3 md:py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs md:text-sm flex items-center gap-2 shadow-lg shadow-[#B8860B]/20 transition-all min-h-[52px]"
           >
@@ -465,6 +555,21 @@ export const InvoiceForm: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Record Collection Modal (only for new invoices) */}
+      {!isEditing && (
+        <RecordCollectionModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          balanceDue={grandTotal}
+          onSubmit={(data) => {
+            setPaymentData(data);
+            setIsPaymentModalOpen(false);
+            toast.success('Payment details saved. Will be recorded when invoice is saved.');
+          }}
+          formatCurrency={(val) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(val)}
+        />
+      )}
 
       {/* Confirmation Dialog */}
       <ConfirmDialog
