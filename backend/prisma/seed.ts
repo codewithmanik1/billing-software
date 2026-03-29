@@ -13,7 +13,7 @@ async function main() {
   await prisma.shopProfile.deleteMany();
 
   // 2. Create Admin User
-  const hashedPassword = await bcrypt.hash('admin', 10);
+  const hashedPassword = await bcrypt.hash('Shree@1984', 10);
   await prisma.user.create({
     data: {
       username: 'admin',
