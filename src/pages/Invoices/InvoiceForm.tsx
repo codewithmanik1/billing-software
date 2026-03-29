@@ -1,65 +1,124 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useForm, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { ArrowLeft, Plus, Save, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Save, Trash2, Loader2, IndianRupee } from 'lucide-react';
 import { toast } from 'sonner';
-import { Combobox } from '@headlessui/react';
+import { Combobox, Transition } from '@headlessui/react';
 import { format } from 'date-fns';
 import mjLogo from '../../assets/mj_logo.png';
 import { useProfile } from '../../context/ProfileContext';
-import { useEnterKeyNavigation } from '../../lib/useEnterKeyNavigation';
 import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
+// ─── Zod Schemas ───────────────────────────────────────────────────────────────
 const invoiceItemSchema = z.object({
   id: z.string().optional(),
   description: z.string().min(1, 'Item name required'),
-  metalType: z.enum(['24K', '22K', '18K', '14K']),
-  weightGrams: z.number().min(0.01, 'Weight > 0'),
-  ratePerGram: z.number().min(1, 'Rate > 0'),
+  metalType: z.enum(['24K', '22K', '18K', '14K', 'Silver']),
+  weightGrams: z.number().min(0.001, 'Weight > 0'),
+  ratePerGram: z.number().min(0, 'Rate >= 0'),
   makingCharges: z.number().min(0, 'Cannot be negative'),
   discount: z.number().nonnegative(),
-  lineTotal: z.number()
+  lineTotal: z.number(),
+});
+
+const paymentSchema = z.object({
+  paymentDate: z.string(),
+  amount: z.number().min(0.01, 'Amount > 0'),
+  paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'OLD_GOLD']),
+  referenceNumber: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 const invoiceSchema = z.object({
   customerId: z.string().min(1, 'Please select a customer'),
   invoiceDate: z.string(),
-  items: z.array(invoiceItemSchema).min(1, 'At least one item is required'),
+  items: z.array(invoiceItemSchema).min(1, 'At least one item required'),
+  payments: z.array(paymentSchema),
   discount: z.number().nonnegative(),
   gstPercent: z.number().nonnegative(),
-  notes: z.string().optional()
+  notes: z.string().optional(),
 });
 
-type InvoiceFormData = z.infer<typeof invoiceSchema>;
+export type InvoiceFormData = z.infer<typeof invoiceSchema>;
 
-// Utility for currency formatting
-const formatCurrency = (val: number) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(val);
+// ─── Utility ───────────────────────────────────────────────────────────────────
+const fmt = (val: number) =>
+  new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(val);
 
+const PURITY_OPTIONS = ['24K', '22K', '18K', '14K', 'Silver'] as const;
+const PAYMENT_MODES = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'UPI', label: 'UPI' },
+  { value: 'CARD', label: 'Card' },
+  { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
+  { value: 'CHEQUE', label: 'Cheque' },
+  { value: 'OLD_GOLD', label: 'Old Gold' },
+] as const;
+
+// ─── Focus helpers ─────────────────────────────────────────────────────────────
+const focusField = (order: number | string, delay = 0) => {
+  setTimeout(() => {
+    const el = document.querySelector(`[data-fo="${order}"]`) as HTMLElement | null;
+    el?.focus();
+  }, delay);
+};
+
+const selectOnFocus = (e: React.FocusEvent<HTMLInputElement>) => e.target.select();
+
+// ─── Component ─────────────────────────────────────────────────────────────────
 export const InvoiceForm: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isEditing = Boolean(id);
-  
+
   const [customerQuery, setCustomerQuery] = useState('');
   const { profile } = useProfile();
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingData, setPendingData] = useState<InvoiceFormData | null>(null);
 
-  const formRef = useRef<HTMLFormElement>(null);
+  // ── RHF setup ──────────────────────────────────────────────────────────────
+  const { register, handleSubmit, control, watch, setValue, reset } =
+    useForm<InvoiceFormData>({
+      resolver: zodResolver(invoiceSchema),
+      defaultValues: {
+        customerId: '',
+        invoiceDate: format(new Date(), 'yyyy-MM-dd'),
+        items: [
+          {
+            description: '',
+            metalType: '22K',
+            weightGrams: 0,
+            ratePerGram: 0,
+            makingCharges: 0,
+            discount: 0,
+            lineTotal: 0,
+          },
+        ],
+        payments: [],
+        discount: 0,
+        gstPercent: 0,
+        notes: '',
+      },
+    });
 
-  useEnterKeyNavigation(formRef, () => {
-    handleSubmit((data) => {
-      setPendingData(data);
-      setIsConfirmOpen(true);
-    })();
-  });
+  const {
+    fields: itemFields,
+    append: appendItem,
+    remove: removeItem,
+  } = useFieldArray({ control, name: 'items' });
 
-  // Fetching data
+  const {
+    fields: paymentFields,
+    append: appendPayment,
+    remove: removePayment,
+  } = useFieldArray({ control, name: 'payments' });
+
+  // ── Queries ────────────────────────────────────────────────────────────────
   const { data: customersRes } = useQuery({
     queryKey: ['customers-mini', customerQuery],
     queryFn: async () => {
@@ -79,85 +138,116 @@ export const InvoiceForm: React.FC = () => {
   });
 
   const existingInvoice = existingInvoiceRes?.data;
-  const customers = customersRes?.data?.customers || [];
+  const customers: any[] = customersRes?.data?.customers || [];
 
-  const { register, handleSubmit, control, watch, setValue, reset } = useForm<InvoiceFormData>({
-    resolver: zodResolver(invoiceSchema),
-    defaultValues: {
-      customerId: '',
-      invoiceDate: format(new Date(), 'yyyy-MM-dd'),
-      items: [{ description: '', metalType: '22K', weightGrams: 0, ratePerGram: 0, makingCharges: 0, discount: 0, lineTotal: 0 }],
-      discount: 0,
-      gstPercent: 3,
-      notes: ''
-    }
-  });
-
-  // Load existing data if editing
+  // ── Load existing invoice ─────────────────────────────────────────────────
   useEffect(() => {
     if (existingInvoice) {
       reset({
         customerId: existingInvoice.customerId,
         invoiceDate: format(new Date(existingInvoice.invoiceDate), 'yyyy-MM-dd'),
-        items: existingInvoice.items.map((item: Record<string, unknown>) => ({
-          id: item.id as string,
-          description: (item.description as string) || '',
-          metalType: (item.metalType as string) || '22K',
+        items: existingInvoice.items.map((item: any) => ({
+          id: item.id,
+          description: item.description || '',
+          metalType: item.metalType || '22K',
           weightGrams: Number(item.weightGrams) || 0,
           ratePerGram: Number(item.ratePerGram) || 0,
           makingCharges: Number(item.makingCharges) || 0,
           discount: Number(item.discount || 0),
-          lineTotal: Number(item.lineTotal || item.amount || 0)
+          lineTotal: Number(item.lineTotal || item.amount || 0),
         })),
-        discount: Number(existingInvoice.additionalDiscount || existingInvoice.discount || 0),
+        discount: Number(
+          existingInvoice.additionalDiscount || existingInvoice.discount || 0
+        ),
         gstPercent: Number(existingInvoice.gstPercent),
-        notes: existingInvoice.notes || ''
+        notes: existingInvoice.notes || '',
       });
     }
   }, [existingInvoice, reset]);
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'items'
-  });
-
+  // ── Live calculations ─────────────────────────────────────────────────────
   const watchItems = watch('items') || [];
-  const watchDiscount = watch('discount') || 0;
-  const watchGstPercent = watch('gstPercent') ?? 3;
+  const watchPayments = watch('payments') || [];
+  const watchDiscount = Number(watch('discount')) || 0;
+  const watchGstPercent = Number(watch('gstPercent')) ?? 3;
   const watchDate = watch('invoiceDate');
 
-  // Real-time calculation
   useEffect(() => {
     watchItems.forEach((item, index) => {
       if (!item) return;
-      const weight = parseFloat(String(item.weightGrams)) || 0;
-      const rate = parseFloat(String(item.ratePerGram)) || 0;
-      const making = parseFloat(String(item.makingCharges)) || 0;
-      const disc = parseFloat(String(item.discount)) || 0;
-      const lineTotal = (weight * rate) + making - disc;
-      
-      if (item.lineTotal !== lineTotal) {
-        setValue(`items.${index}.lineTotal`, lineTotal, { shouldValidate: true });
-      }
+      const w = parseFloat(String(item.weightGrams)) || 0;
+      const r = parseFloat(String(item.ratePerGram)) || 0;
+      const m = parseFloat(String(item.makingCharges)) || 0;
+      const d = parseFloat(String(item.discount)) || 0;
+      const lt = w * r + m - d;
+      if (item.lineTotal !== lt)
+        setValue(`items.${index}.lineTotal`, lt, { shouldValidate: true });
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [watchItems.map(i => `${i?.weightGrams}-${i?.ratePerGram}-${i?.makingCharges}-${i?.discount}`).join(','), setValue]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    watchItems
+      .map((i) => `${i?.weightGrams}-${i?.ratePerGram}-${i?.makingCharges}-${i?.discount}`)
+      .join(','),
+    setValue,
+  ]);
 
-  const subtotal = watchItems.reduce((sum, item) => sum + (Number(item?.lineTotal) || 0), 0);
-  const amountAfterDiscount = Math.max(0, subtotal - Number(watchDiscount));
-  const gstAmount = (amountAfterDiscount * Number(watchGstPercent)) / 100;
-  const grandTotal = amountAfterDiscount + gstAmount;
+  const subtotal = watchItems.reduce((s, i) => s + (Number(i?.lineTotal) || 0), 0);
+  const afterDiscount = Math.max(0, subtotal - watchDiscount);
+  const gstAmount = (afterDiscount * watchGstPercent) / 100;
+  const grandTotal = afterDiscount + gstAmount;
+  const totalCollected = watchPayments.reduce((s, p) => s + (Number(p?.amount) || 0), 0);
+  const balanceRemaining = Math.max(0, grandTotal - totalCollected);
 
-  // Mutations
+  // ── Auto-focus customer on mount ──────────────────────────────────────────
+  useEffect(() => {
+    const t = setTimeout(() => focusField('cust'), 300);
+    return () => clearTimeout(t);
+  }, []);
+
+  // ── Customer selection ─────────────────────────────────────────────────────
+  const selectedCustomerId = watch('customerId');
+  const selectedCustomerObj =
+    customers.find((c) => c.id === selectedCustomerId) ||
+    existingInvoice?.customer;
+
+  const formattedDateForHeader = watchDate
+    ? format(new Date(watchDate + 'T00:00:00'), 'dd MMM yyyy')
+    : '';
+
+  // ── Mutations ─────────────────────────────────────────────────────────────
   const createMutation = useMutation({
-    mutationFn: (data: InvoiceFormData) => api.post('/invoices', data),
-    onSuccess: () => {
+    mutationFn: (data: any) => api.post('/invoices', data),
+    retry: false,
+    onSuccess: async (res) => {
+      const newId = res.data?.data?.id;
+      if (pendingData?.payments?.length && newId) {
+        let sc = 0,
+          fc = 0;
+        for (const p of pendingData.payments) {
+          try {
+            await api.post('/payments', { ...p, invoiceId: newId });
+            sc++;
+          } catch {
+            fc++;
+          }
+        }
+        if (fc === 0)
+          toast.success(`Invoice generated & ${sc} payment(s) recorded`);
+        else toast.warning(`Invoice saved but ${fc} payment(s) failed.`);
+      } else {
+        toast.success('Invoice generated successfully');
+      }
       queryClient.invalidateQueries({ queryKey: ['invoices'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-summary'] });
-      toast.success('Invoice generated successfully');
       navigate('/invoices');
     },
-    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to create invoice'),
+    onError: (err: any) => {
+      const apiMsg = err.response?.data?.message || err.message || 'Failed to create invoice';
+      const issues = err.response?.data?.errors;
+      const detail = issues ? ' — ' + issues.map((e: any) => `${e.field}: ${e.message}`).join(', ') : '';
+      console.error('[InvoiceForm] Create failed:', err.response?.data);
+      toast.error(apiMsg + detail, { duration: 8000 });
+    },
   });
 
   const updateMutation = useMutation({
@@ -168,7 +258,8 @@ export const InvoiceForm: React.FC = () => {
       toast.success('Invoice updated successfully');
       navigate(`/invoices/${id}`);
     },
-    onError: (err: { response?: { data?: { message?: string } } }) => toast.error(err.response?.data?.message || 'Failed to update invoice'),
+    onError: (err: any) =>
+      toast.error(err.response?.data?.message || 'Failed to update invoice'),
   });
 
   const onSubmit = (data: InvoiceFormData) => {
@@ -177,222 +268,384 @@ export const InvoiceForm: React.FC = () => {
   };
 
   const handleConfirmSave = () => {
-    if (pendingData) {
-      if (isEditing) {
-        updateMutation.mutate(pendingData);
+    if (!pendingData) return;
+    if (totalCollected > grandTotal + 0.01) {
+      toast.error('Total collected exceeds grand total. Please adjust.');
+      return;
+    }
+    const { payments, discount, items, ...rest } = pendingData;
+
+    // Sanitize items — API expects no lineTotal / id / extra fields
+    const sanitizedItems = items.map(({ description, metalType, weightGrams, ratePerGram, makingCharges, discount: itemDiscount }) => ({
+      description,
+      metalType,
+      weightGrams: Number(weightGrams) || 0,
+      ratePerGram: Number(ratePerGram) || 0,
+      makingCharges: Number(makingCharges) || 0,
+      discount: Number(itemDiscount) || 0,
+    }));
+
+    const invoicePayload = {
+      ...rest,
+      items: sanitizedItems,
+      additionalDiscount: Number(discount) || 0,
+    };
+
+    console.log('[InvoiceForm] Submitting payload:', JSON.stringify(invoicePayload, null, 2));
+
+    if (isEditing) updateMutation.mutate(invoicePayload as any);
+    else createMutation.mutate(invoicePayload as any);
+  };
+
+  // ── Keyboard helper for Enter-key on a field ───────────────────────────────
+  const onEnter =
+    (nextOrder: number | string) =>
+      (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          focusField(nextOrder);
+        }
+      };
+
+  // ── Keyboard: Making field of last row → add new row ──────────────────────
+  const onMakingKeyDown = (index: number) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (index === itemFields.length - 1) {
+        appendItem({
+          description: '',
+          metalType: '22K',
+          weightGrams: 0,
+          ratePerGram: 0,
+          makingCharges: 0,
+          discount: 0,
+          lineTotal: 0,
+        });
+        focusField(`item-${index + 1}-desc`, 60);
       } else {
-        createMutation.mutate(pendingData);
+        focusField(`item-${index + 1}-desc`);
       }
     }
   };
 
-  const selectedCustomerId = watch('customerId');
-  const selectedCustomerObj = customers.find((c: Record<string, unknown>) => c.id === selectedCustomerId) || existingInvoice?.customer;
-  const formattedDateForHeader = watchDate ? format(new Date(watchDate), 'dd MMM yyyy') : '';
+  // ── Keyboard: payment ref → if balance still remaining go to next payment amount ──
+  const onPaymentRefKeyDown = (index: number) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (balanceRemaining > 0.01) {
+        appendPayment({
+          paymentDate: format(new Date(), 'yyyy-MM-dd'),
+          amount: balanceRemaining,
+          paymentMode: 'CASH',
+        });
+        focusField(`pay-${index + 1}-amount`, 60);
+      } else {
+        focusField('remarks');
+      }
+    }
+  };
 
   if (isEditing && isLoadingInvoice) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <Loader2 className="w-10 h-10 text-[#B8860B] animate-spin mb-4" />
-        <p className="text-[#6B5E4A] font-serif italic">Retrieving invoice draft...</p>
+        <p className="text-[#6B5E4A] font-serif italic">Retrieving invoice draft…</p>
       </div>
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-500 pb-12">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-4">
-           <button type="button" onClick={() => navigate(-1)} className="p-2.5 bg-white dark:bg-dark-900 border border-gray-100 dark:border-dark-800 hover:bg-[#B8860B]/10 rounded-xl transition-all text-gray-400 hover:text-[#B8860B]">
-             <ArrowLeft size={20} />
-           </button>
-           <div>
-               <h1 className="text-2xl font-bold text-[#1A1209] dark:text-[#F5F5F0]">{isEditing ? 'Edit Invoice' : 'New Invoice'}</h1>
-            </div>
-        </div>
+      {/* Page header */}
+      <div className="flex items-center gap-4 mb-2">
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="p-2.5 bg-white dark:bg-dark-900 border border-gray-100 dark:border-dark-800 hover:bg-[#B8860B]/10 rounded-xl transition-all text-gray-400 hover:text-[#B8860B]"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-2xl font-bold font-serif text-[#1A1209] dark:text-[#F5F5F0]">
+          {isEditing ? 'Edit Invoice' : 'New Invoice'}
+        </h1>
       </div>
 
-      <form ref={formRef} onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Invoice Letterhead Preview Section */}
+      <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
+        {/* ── SECTION 1: Letterhead ─────────────────────────────────────────── */}
         <div className="card p-4 md:p-8 bg-white dark:bg-[#1A1A1A] shadow-xl rounded-2xl flex flex-col md:flex-row justify-between items-start md:items-center border border-gray-100 dark:border-dark-800 gap-6">
-           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6 text-center md:text-left w-full md:w-auto">
-              <div className="relative group">
-                <div className="absolute inset-0 rounded-2xl bg-[#B8860B]/10 blur-xl group-hover:blur-2xl transition-all duration-500" />
-                <img
-                  src={mjLogo}
-                  alt="More Jewellers"
-                  onError={(e) => {
-                    e.currentTarget.src = '/mj_logo.png';
-                  }}
-                  className="relative w-16 h-16 md:w-20 md:h-20 rounded-2xl object-contain bg-white p-2 shadow-inner border border-gray-100"
-                />
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6 text-center md:text-left w-full md:w-auto">
+            <div className="relative group">
+              <div className="absolute inset-0 rounded-2xl bg-[#B8860B]/10 blur-xl group-hover:blur-2xl transition-all duration-500" />
+              <img
+                src={mjLogo}
+                alt="More Jewellers"
+                onError={(e) => { e.currentTarget.src = '/mj_logo.png'; }}
+                className="relative w-16 h-16 md:w-20 md:h-20 rounded-2xl object-contain bg-white p-2 shadow-inner border border-gray-100"
+              />
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-[#B8860B] text-2xl font-serif font-bold uppercase tracking-tight">
+                {profile.name}
+              </h2>
+              <div className="text-[10px] space-y-0.5">
+                <p className="text-gray-500 uppercase font-bold tracking-widest">{profile.tagline}</p>
+                <p className="text-gray-400 font-medium">
+                  Mob: {profile.phone}&nbsp;|&nbsp;{profile.email}
+                </p>
+                <p className="text-gray-400 font-medium">{profile.address}</p>
               </div>
-              <div className="space-y-1">
-                <h2 className="text-[#B8860B] text-2xl font-bold uppercase tracking-tight">{profile.name}</h2>
-                <div className="text-[10px] space-y-0.5">
-                   <p className="text-gray-500 uppercase font-bold tracking-widest">{profile.tagline}</p>
-                   <p className="text-gray-400 font-medium">Mob: {profile.phone} &nbsp;|&nbsp; {profile.email}</p>
-                   <p className="text-gray-400 font-medium">{profile.address}</p>
-                </div>
-              </div>
-           </div>
-
-           <div className="w-full text-center md:text-right mt-4 md:mt-0">
-              <h1 className="text-2xl md:text-3xl font-black text-[#B8860B] leading-none mb-2">INVOICE</h1>
-              <div className="text-base md:text-lg font-bold text-gray-900 dark:text-white font-mono tracking-tighter">
-                 {isEditing ? existingInvoice?.invoiceNumber : 'INV-2024-001'}
-              </div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Date: {formattedDateForHeader || '15 Mar 2026'}</p>
-           </div>
+            </div>
+          </div>
+          <div className="w-full text-center md:text-right mt-4 md:mt-0">
+            <h1 className="text-2xl md:text-3xl font-black font-serif text-[#B8860B] leading-none mb-2">
+              INVOICE
+            </h1>
+            <div className="text-base md:text-lg font-bold text-gray-900 dark:text-white font-mono tracking-tighter">
+              {isEditing
+                ? existingInvoice?.invoiceNumber
+                : `INV-DRAFT-${new Date().getFullYear()}`}
+            </div>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+              Date: {formattedDateForHeader}
+            </p>
+          </div>
         </div>
 
-        {/* Header Information */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 md:gap-6">
-          <div className="lg:col-span-3 card p-4 md:p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Customer Details</h2>
-            
-            <div className="space-y-6">
-               <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Select Customer <span className="text-red-500">*</span></label>
-                  <Controller
-                    control={control}
-                    name="customerId"
-                    render={({ field }) => (
-                      <Combobox value={field.value} onChange={field.onChange}>
-                        <div className="relative">
-                          <Combobox.Input
-                            data-field-order="1"
-                            className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none transition-all"
-                            displayValue={(id: string) => customers.find((c: Record<string, unknown>) => c.id === id)?.name as string || existingInvoice?.customer.name || ''}
-                            onChange={(event) => setCustomerQuery(event.target.value)}
-                            placeholder="Rajesh Sharma"
-                          />
-                          <Combobox.Options className="absolute z-20 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 py-1 text-base shadow-2xl">
-                            {/* ... same customers map ... */}
-                            {customers.map((customer: Record<string, string>) => (
-                                <Combobox.Option key={customer.id} className={({ active }) => `relative cursor-pointer select-none py-3 pl-4 pr-4 ${active ? 'bg-[#B8860B]/10 text-[#B8860B]' : 'text-gray-700 animate-in fade-in transition-all'}`} value={customer.id}>
-                                  <div className="font-bold">{customer.name}</div>
-                                </Combobox.Option>
-                            ))}
-                          </Combobox.Options>
-                        </div>
-                      </Combobox>
+        {/* ── SECTION 2: Customer + Date — single row ───────────────────────── */}
+        <div className="card p-4 md:p-6 bg-white dark:bg-[#1A1A1A] shadow-xl rounded-2xl border border-gray-100 dark:border-dark-800">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 items-start">
+            {/* Customer combobox — takes 2/3 */}
+            <div className="md:col-span-2 space-y-1">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Customer <span className="text-red-500">*</span>
+              </label>
+              <Controller
+                control={control}
+                name="customerId"
+                render={({ field }) => (
+                  <Combobox
+                    value={field.value}
+                    onChange={(val) => {
+                      field.onChange(val);
+                      // Jump to date after selection
+                      focusField('date', 60);
+                    }}
+                  >
+                    <div className="relative">
+                      <Combobox.Input
+                        data-fo="cust"
+                        className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/30 outline-none transition-all"
+                        displayValue={(cid: string) =>
+                          customers.find((c) => c.id === cid)?.name ||
+                          existingInvoice?.customer?.name ||
+                          ''
+                        }
+                        onChange={(e) => setCustomerQuery(e.target.value)}
+                        placeholder="Type customer name…"
+                        onKeyDown={(e) => {
+                          // Arrow navigation is handled by HeadlessUI Combobox natively
+                          // We only intercept Tab to jump to date
+                          if (e.key === 'Tab' && !e.shiftKey) {
+                            // allow default Tab — date input is next in DOM
+                          }
+                        }}
+                      />
+                      <Transition
+                        as={Fragment}
+                        leave="transition ease-in duration-100"
+                        leaveFrom="opacity-100"
+                        leaveTo="opacity-0"
+                      >
+                        <Combobox.Options className="absolute z-40 mt-2 max-h-60 w-full overflow-auto rounded-xl bg-white dark:bg-dark-800 border border-gray-100 dark:border-dark-700 py-1 shadow-2xl">
+                          {customers.length === 0 && (
+                            <p className="px-4 py-3 text-xs text-gray-400 italic">
+                              No customers found
+                            </p>
+                          )}
+                          {customers.map((c: any) => (
+                            <Combobox.Option
+                              key={c.id}
+                              value={c.id}
+                              className={({ active }) =>
+                                `cursor-pointer select-none py-3 px-4 flex justify-between items-center ${active
+                                  ? 'bg-[#B8860B]/10 text-[#B8860B]'
+                                  : 'text-gray-700 dark:text-gray-200'
+                                }`
+                              }
+                            >
+                              <span className="font-bold">{c.name}</span>
+                              <span className="text-xs text-gray-400 font-mono">{c.phone}</span>
+                            </Combobox.Option>
+                          ))}
+                        </Combobox.Options>
+                      </Transition>
+                    </div>
+
+                    {/* Inline customer detail pills */}
+                    {selectedCustomerObj && (
+                      <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-400">
+                        <span>
+                          📞{' '}
+                          <span className="font-semibold text-gray-600 dark:text-gray-300">
+                            {selectedCustomerObj.phone}
+                          </span>
+                        </span>
+                        {selectedCustomerObj.address && (
+                          <span>
+                            📍{' '}
+                            <span className="font-semibold text-gray-600 dark:text-gray-300">
+                              {selectedCustomerObj.address}
+                            </span>
+                          </span>
+                        )}
+                      </div>
                     )}
-                  />
-               </div>
-
-               {selectedCustomerObj ? (
-                 <div className="bg-gray-50 dark:bg-dark-900 p-6 rounded-2xl space-y-2 border border-blue-50/50">
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Phone: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.phone}</span></p>
-                    {selectedCustomerObj.address && <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Address: <span className="font-bold text-gray-900 dark:text-white ml-2">{selectedCustomerObj.address}</span></p>}
-                 </div>
-               ) : (
-                 <div className="h-28 bg-gray-50 dark:bg-dark-900 rounded-2xl flex items-center justify-center border border-dashed border-gray-200">
-                    <p className="text-xs text-gray-400 font-medium italic">Select a customer to view more details</p>
-                 </div>
-               )}
+                  </Combobox>
+                )}
+              />
             </div>
-          </div>
 
-          <div className="lg:col-span-2 card p-4 md:p-8 rounded-2xl shadow-xl space-y-6 border border-gray-100 dark:border-dark-800">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Invoice Meta</h2>
-            <div className="space-y-5">
-              <div className="space-y-1.5">
-                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Date <span className="text-red-500">*</span></label>
-                  <input data-field-order="2" type="date" {...register('invoiceDate')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none" />
-              </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">Notes / Remarks</label>
-                <textarea data-field-order="3" {...register('notes')} className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/20 outline-none h-24 italic" placeholder="Thank you for your business!" />
-              </div>
+            {/* Date — takes 1/3 */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                data-fo="date"
+                type="date"
+                {...register('invoiceDate')}
+                onKeyDown={onEnter('item-0-desc')}
+                className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
+              />
             </div>
           </div>
         </div>
 
-        {/* Line Items */}
+        {/* ── SECTION 3: Line Items ─────────────────────────────────────────── */}
         <div className="card p-0 rounded-2xl shadow-xl border border-gray-100 dark:border-dark-800 overflow-hidden">
-          <div className="p-6 border-b border-gray-50 dark:border-dark-800 flex justify-between items-center bg-white dark:bg-dark-900">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Line Items</h2>
-            <button 
-              type="button" 
-              onClick={() => append({ description: '', metalType: '22K', weightGrams: 0, ratePerGram: 0, makingCharges: 0, discount: 0, lineTotal: 0 })}
-              className="px-4 py-2 bg-gray-50 dark:bg-dark-800 hover:bg-gray-100 dark:hover:bg-dark-700 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
-            >
-              <Plus size={14} /> Add Item
-            </button>
+          <div className="p-5 border-b border-gray-50 dark:border-dark-800 flex justify-between items-center bg-white dark:bg-dark-900">
+            <h2 className="text-lg font-bold font-serif text-gray-900 dark:text-white">
+              Line Items
+            </h2>
           </div>
-          
-          <div className="overflow-x-auto shadow-[inset_-15px_0_15px_-15px_rgba(184,134,11,0.15)] md:shadow-none min-h-[300px]">
+
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-sm min-w-[700px]">
               <thead className="bg-gray-50 dark:bg-dark-900 border-b border-gray-100 dark:border-dark-800">
                 <tr>
-                  <th className="py-4 pl-6 pr-2 font-bold text-gray-500 uppercase tracking-widest text-[10px] whitespace-normal max-w-[120px]" style={{ width: '35%' }}>Item Name</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '8%' }}>Purity</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '12%' }}>Weight (g)</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '12%' }}>Rate/g (₹)</th>
-                  <th className="py-4 px-1 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-center whitespace-normal" style={{ width: '12%' }}>Making (₹)</th>
-                  <th className="py-4 pl-1 pr-4 font-bold text-gray-500 uppercase tracking-widest text-[10px] text-right whitespace-normal" style={{ width: '13%' }}>Amount (₹)</th>
-                  <th className="py-4 px-1 text-center" style={{ width: '8%' }}></th>
+                  <th className="py-4 pl-6 pr-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest" style={{ width: '30%' }}>
+                    Item Name
+                  </th>
+                  <th className="py-4 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center" style={{ width: '9%' }}>
+                    Purity
+                  </th>
+                  <th className="py-4 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center" style={{ width: '12%' }}>
+                    Weight (g)
+                  </th>
+                  <th className="py-4 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center" style={{ width: '13%' }}>
+                    Rate/g (₹)
+                  </th>
+                  <th className="py-4 px-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-center" style={{ width: '13%' }}>
+                    Making (₹)
+                  </th>
+                  <th className="py-4 pl-2 pr-4 text-[10px] font-bold text-gray-500 uppercase tracking-widest text-right" style={{ width: '15%' }}>
+                    Amount (₹)
+                  </th>
+                  <th style={{ width: '8%' }} />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 dark:divide-dark-800">
-                {fields.map((field, index) => (
-                  <tr key={field.id} className="bg-white dark:bg-dark-900 transition-colors">
-                    <td className="pl-6 pr-2 py-4">
+                {itemFields.map((field, index) => (
+                  <tr
+                    key={field.id}
+                    className="bg-white dark:bg-dark-900 hover:bg-[#FFF8EC] dark:hover:bg-dark-800 transition-colors"
+                  >
+                    {/* Item Name */}
+                    <td className="pl-6 pr-2 py-3">
                       <input
-                        data-field-order={10 + index * 10 + 1}
+                        data-fo={`item-${index}-desc`}
                         {...register(`items.${index}.description`)}
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-medium focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
-                        placeholder="18K Gold Earrings"
+                        onKeyDown={onEnter(`item-${index}-purity`)}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-medium focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
+                        placeholder="e.g. 22K Gold Chain"
                       />
                     </td>
-                    <td className="px-1 py-4">
+
+                    {/* Purity */}
+                    <td className="px-1 py-3">
                       <select
-                        data-field-order={10 + index * 10 + 2}
+                        data-fo={`item-${index}-purity`}
                         {...register(`items.${index}.metalType`)}
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-0 py-2 text-gray-900 dark:text-white font-bold text-center appearance-none focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            focusField(`item-${index}-weight`);
+                          }
+                        }}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-bold text-center appearance-none focus:ring-2 focus:ring-[#B8860B]/30 outline-none cursor-pointer"
                       >
-                        <option value="24K">24K</option>
-                        <option value="22K">22K</option>
-                        <option value="18K">18K</option>
-                        <option value="14K">14K</option>
+                        {PURITY_OPTIONS.map((p) => (
+                          <option key={p} value={p}>{p}</option>
+                        ))}
                       </select>
                     </td>
-                    <td className="px-1 py-4">
+
+                    {/* Weight */}
+                    <td className="px-1 py-3">
                       <input
-                        data-field-order={10 + index * 10 + 3}
-                        type="number" step="0.001"
+                        data-fo={`item-${index}-weight`}
+                        type="number"
+                        step="0.001"
                         {...register(`items.${index}.weightGrams`, { valueAsNumber: true })}
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        onFocus={selectOnFocus}
+                        onKeyDown={onEnter(`item-${index}-rate`)}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
                       />
                     </td>
-                    <td className="px-1 py-4">
+
+                    {/* Rate */}
+                    <td className="px-1 py-3">
                       <input
-                        data-field-order={10 + index * 10 + 4}
-                        type="number" step="1"
+                        data-fo={`item-${index}-rate`}
+                        type="number"
+                        step="1"
                         {...register(`items.${index}.ratePerGram`, { valueAsNumber: true })}
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        onFocus={selectOnFocus}
+                        onKeyDown={onEnter(`item-${index}-making`)}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
                       />
                     </td>
-                    <td className="px-1 py-4">
+
+                    {/* Making */}
+                    <td className="px-1 py-3">
                       <input
-                        data-field-order={10 + index * 10 + 5}
-                        type="number" step="1"
+                        data-fo={`item-${index}-making`}
+                        type="number"
+                        step="1"
                         {...register(`items.${index}.makingCharges`, { valueAsNumber: true })}
-                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                        onFocus={selectOnFocus}
+                        onKeyDown={onMakingKeyDown(index)}
+                        className="w-full bg-gray-50 dark:bg-dark-800 rounded-lg px-1 py-2 text-gray-900 dark:text-white font-mono text-center focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
                       />
                     </td>
-                    <td className="pl-1 pr-4 py-4 text-right">
-                       <span className="text-gray-900 dark:text-white font-black text-sm font-mono tracking-tighter">
-                          {formatCurrency(watchItems[index]?.lineTotal || 0)}
-                       </span>
+
+                    {/* Amount — read-only */}
+                    <td className="pl-2 pr-4 py-3 text-right">
+                      <span className="font-black text-sm font-mono tracking-tighter text-gray-900 dark:text-white">
+                        {fmt(watchItems[index]?.lineTotal || 0)}
+                      </span>
                     </td>
-                    <td className="px-1 py-4 text-center">
+
+                    {/* Delete */}
+                    <td className="px-1 py-3 text-center">
                       <button
                         type="button"
-                        onClick={() => remove(index)}
-                        disabled={fields.length === 1}
-                        className="py-3 px-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50 disabled:opacity-0"
+                        onClick={() => removeItem(index)}
+                        disabled={itemFields.length === 1}
+                        className="py-3 px-2 min-w-[44px] min-h-[44px] flex items-center justify-center text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50 disabled:opacity-0 focus:ring-2 focus:ring-[#B8860B]/20 outline-none"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -402,81 +655,275 @@ export const InvoiceForm: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Add Item row */}
+          <div className="border-t border-gray-50 dark:border-dark-800 bg-white dark:bg-dark-900 px-4 py-3">
+            <button
+              type="button"
+              onClick={() =>
+                appendItem({
+                  description: '',
+                  metalType: '22K',
+                  weightGrams: 0,
+                  ratePerGram: 0,
+                  makingCharges: 0,
+                  discount: 0,
+                  lineTotal: 0,
+                })
+              }
+              className="w-full py-2 text-xs font-bold uppercase tracking-widest text-[#B8860B] hover:bg-[#B8860B]/5 rounded-lg flex items-center justify-center gap-2 transition-all focus:ring-2 focus:ring-[#B8860B]/20 outline-none"
+            >
+              <Plus size={14} /> Add Another Item
+            </button>
+          </div>
         </div>
 
-        {/* Totals Section */}
-        <div className="flex justify-end">
-           <div className="w-full lg:w-4/12 card p-5 md:p-8 rounded-2xl shadow-xl bg-gray-50/50 dark:bg-dark-900 border border-gray-100 dark:border-dark-800 space-y-4">
-              <div className="space-y-3">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-bold text-gray-500 uppercase tracking-widest">Subtotal</span>
-                    <span className="font-bold text-gray-900 dark:text-white font-mono">₹{formatCurrency(subtotal)}</span>
+        {/* ── SECTION 5: Payment Collection — full width, directly below Line Items ── */}
+        {!isEditing && (
+          <div className="card p-0 rounded-2xl shadow-xl border border-[#B8860B]/10 bg-white dark:bg-dark-900 overflow-hidden">
+            {/* Header */}
+            <div className="px-6 py-4 bg-[#B8860B]/5 border-b border-[#B8860B]/10 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <IndianRupee size={15} className="text-[#B8860B]" />
+                <h2 className="text-sm font-bold uppercase tracking-widest text-gray-900 dark:text-white">
+                  Payment Collection
+                </h2>
+                <span className="text-[10px] text-gray-400 italic ml-1">(optional)</span>
+              </div>
+              <div className="text-right">
+                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Bal. Remaining</p>
+                <p className={`text-sm font-black font-mono ${balanceRemaining > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                  {balanceRemaining > 0 ? `₹${fmt(balanceRemaining)}` : '✅ Fully Paid'}
+                </p>
+              </div>
+            </div>
+
+            {paymentFields.length > 0 ? (
+              <>
+                {/* Column headers */}
+                <div className="grid grid-cols-[1fr_1fr_1fr_1.5fr_auto] gap-3 px-6 py-2 bg-gray-50 dark:bg-dark-900 border-b border-gray-100 dark:border-dark-800">
+                  {['Amount (₹)', 'Method', 'Date', 'Ref / TID', ''].map((h) => (
+                    <span key={h} className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{h}</span>
+                  ))}
+                </div>
+
+                {/* Payment rows */}
+                {paymentFields.map((pf, idx) => (
+                  <div
+                    key={pf.id}
+                    className="grid grid-cols-[1fr_1fr_1fr_1.5fr_auto] gap-3 items-center px-6 py-3 border-b border-gray-50 dark:border-dark-800 last:border-0 hover:bg-[#FFF8EC] dark:hover:bg-dark-800/30 transition-colors"
+                  >
+                    <input
+                      data-fo={`pay-${idx}-amount`}
+                      type="number"
+                      step="0.01"
+                      {...register(`payments.${idx}.amount`, { valueAsNumber: true })}
+                      onFocus={selectOnFocus}
+                      onKeyDown={onEnter(`pay-${idx}-mode`)}
+                      className="w-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-3 py-2 text-sm font-black text-green-600 font-mono focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
+                    />
+                    <select
+                      data-fo={`pay-${idx}-mode`}
+                      {...register(`payments.${idx}.paymentMode`)}
+                      onKeyDown={onEnter(`pay-${idx}-date`)}
+                      className="w-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-[#B8860B]/30 outline-none cursor-pointer"
+                    >
+                      {PAYMENT_MODES.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
+                    </select>
+                    <input
+                      data-fo={`pay-${idx}-date`}
+                      type="date"
+                      {...register(`payments.${idx}.paymentDate`)}
+                      onKeyDown={onEnter(`pay-${idx}-ref`)}
+                      className="w-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-2 text-xs font-semibold focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
+                    />
+                    <input
+                      data-fo={`pay-${idx}-ref`}
+                      type="text"
+                      {...register(`payments.${idx}.referenceNumber`)}
+                      onKeyDown={onPaymentRefKeyDown(idx)}
+                      className="w-full bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-3 py-2 text-[11px] font-mono uppercase focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
+                      placeholder="TXN / UPI Ref"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePayment(idx)}
+                      className="p-2 text-gray-300 hover:text-red-500 transition-all rounded-lg hover:bg-red-50 focus:ring-2 focus:ring-red-200 outline-none"
+                    >
+                      <Trash2 size={15} />
+                    </button>
                   </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Discount (₹)</span>
-                    <input 
-                      data-field-order="1000000"
-                      type="number" 
-                      {...register('discount', { valueAsNumber: true })} 
-                      className="w-20 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-1 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
+                ))}
+
+                {/* Add Payment button row */}
+                <div className="border-t border-gray-50 dark:border-dark-800 bg-white dark:bg-dark-900 px-4 py-3">
+                  <button
+                    type="button"
+                    onClick={() => appendPayment({ paymentDate: format(new Date(), 'yyyy-MM-dd'), amount: Math.max(0, balanceRemaining), paymentMode: 'CASH' })}
+                    className="w-full py-2 text-xs font-bold uppercase tracking-widest text-[#B8860B] hover:bg-[#B8860B]/5 rounded-lg flex items-center justify-center gap-2 transition-all focus:ring-2 focus:ring-[#B8860B]/20 outline-none"
+                  >
+                    <Plus size={14} /> Add Payment
+                  </button>
+                </div>
+
+                {/* Summary footer */}
+                <div className="px-6 pb-4 pt-1 flex flex-wrap gap-6 text-[11px] font-bold">
+                  <span className="text-gray-400 uppercase tracking-widest">
+                    Collected: <span className="text-green-600 font-mono ml-1">₹{fmt(totalCollected)}</span>
+                  </span>
+                  <span className="text-gray-400 uppercase tracking-widest">
+                    Pending: <span className={`font-mono ml-1 ${balanceRemaining > 0 ? 'text-red-500' : 'text-green-500'}`}>₹{fmt(balanceRemaining)}</span>
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="p-6 flex flex-col items-center justify-center">
+                <button
+                  type="button"
+                  data-fo="collect-btn"
+                  onClick={() => appendPayment({ paymentDate: format(new Date(), 'yyyy-MM-dd'), amount: grandTotal > 0 ? grandTotal : 0, paymentMode: 'CASH' })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      appendPayment({ paymentDate: format(new Date(), 'yyyy-MM-dd'), amount: grandTotal > 0 ? grandTotal : 0, paymentMode: 'CASH' });
+                      focusField('pay-0-amount', 60);
+                    }
+                  }}
+                  className="px-7 py-3 bg-white dark:bg-dark-900 border border-gray-200 dark:border-dark-800 rounded-xl text-[11px] font-bold text-[#B8860B] uppercase tracking-widest flex items-center gap-2 hover:bg-gray-50 dark:hover:bg-dark-800 shadow-sm transition-all focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
+                >
+                  <IndianRupee size={15} /> Collect Payment
+                </button>
+                <p className="text-[10px] text-gray-400 italic mt-2">Leave empty to save invoice with full balance due</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SECTION 4 + 6 + 7: Totals (right), Remarks + Actions (full-width) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Empty left spacer on large screens */}
+          <div className="hidden lg:block lg:col-span-2" />
+
+          {/* Right column */}
+          <div className="lg:col-span-3 space-y-5">
+            {/* Totals */}
+            <div className="card p-6 md:p-8 rounded-2xl shadow-xl bg-gray-50/50 dark:bg-dark-900 border border-gray-100 dark:border-dark-800">
+              <h2 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-5">
+                Invoice Totals
+              </h2>
+              <div className="space-y-0 divide-y divide-gray-100 dark:divide-dark-800">
+                {/* SUBTOTAL */}
+                <div className="flex items-center justify-between py-3">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Subtotal</span>
+                  <span className="text-base font-black font-mono text-gray-900 dark:text-white">₹{fmt(subtotal)}</span>
+                </div>
+
+                {/* DISCOUNT */}
+                <div className="flex items-center justify-between py-3">
+                  <label htmlFor="field-discount" className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Discount (₹)</label>
+                  <input
+                    id="field-discount"
+                    data-fo="discount"
+                    type="number"
+                    {...register('discount', { valueAsNumber: true })}
+                    onFocus={selectOnFocus}
+                    onKeyDown={onEnter('gst')}
+                    className="w-32 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-3 py-1.5 text-sm font-mono font-bold text-right focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
+                  />
+                </div>
+
+                {/* GST */}
+                <div className="flex items-center justify-between py-3">
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="field-gst" className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">GST (%)</label>
+                    <input
+                      id="field-gst"
+                      data-fo="gst"
+                      type="number"
+                      {...register('gstPercent', { valueAsNumber: true })}
+                      onFocus={selectOnFocus}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (paymentFields.length > 0) focusField('pay-0-amount');
+                          else focusField('collect-btn');
+                        }
+                      }}
+                      className="w-16 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-1.5 text-sm font-mono font-bold text-center focus:ring-2 focus:ring-[#B8860B]/30 outline-none"
                     />
                   </div>
-                  
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">GST (%)</span>
-                    <input 
-                      data-field-order="1000001"
-                      type="number" 
-                      {...register('gstPercent', { valueAsNumber: true })} 
-                      className="w-20 bg-white dark:bg-dark-800 border border-gray-200 dark:border-dark-700 rounded-lg px-2 py-1 text-[#1A1209] dark:text-white font-mono font-bold text-right focus:ring-1 focus:ring-[#B8860B]/40 outline-none"
-                    />
-                  </div>
-                  
-                  <div className="flex justify-between items-center text-xs text-gray-500 font-bold border-t border-gray-200 dark:border-dark-800 pt-3">
-                    <span className="uppercase tracking-widest text-[10px]">GST Amount</span>
-                    <span className="font-mono">₹{formatCurrency(gstAmount)}</span>
-                  </div>
-              </div>
+                  <span className="text-base font-black font-mono text-gray-700 dark:text-gray-300">₹{fmt(gstAmount)}</span>
+                </div>
 
-              <div className="pt-4 border-t-2 border-gray-200 dark:border-dark-800">
-                  <div className="flex justify-between items-baseline group">
-                     <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Grand Total</span>
-                     <span className="text-2xl font-black text-[#B8860B] font-mono tracking-tighter">
-                        ₹{formatCurrency(grandTotal)}
-                     </span>
-                  </div>
+                {/* GRAND TOTAL */}
+                <div className="flex items-center justify-between pt-4 pb-1">
+                  <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest">Grand Total</span>
+                  <span className="text-3xl font-black text-[#B8860B] font-mono tracking-tighter">₹{fmt(grandTotal)}</span>
+                </div>
               </div>
-           </div>
-        </div>
+            </div>
 
-        {/* Form Actions */}
-        <div className="flex flex-col-reverse md:flex-row justify-end gap-3 mt-8">
-          <button type="button" onClick={() => navigate(-1)} className="w-full md:w-auto px-10 py-3 md:py-3.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold text-xs md:text-sm uppercase tracking-widest transition-all min-h-[52px]">
-            Cancel
-          </button>
-          <button 
-             type="submit" 
-             disabled={createMutation.isPending || updateMutation.isPending}
-             className="w-full md:w-auto justify-center bg-[#B8860B] hover:bg-[#8B6508] text-white px-10 py-3 md:py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs md:text-sm flex items-center gap-2 shadow-lg shadow-[#B8860B]/20 transition-all min-h-[52px]"
-          >
-            {createMutation.isPending || updateMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {isEditing ? 'Update Invoice' : 'Save Invoice'}
-          </button>
+            {/* SECTION 6: Remarks */}
+            <div className="card p-5 rounded-2xl shadow-xl bg-white dark:bg-dark-900 border border-gray-100 dark:border-dark-800 space-y-2">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest">
+                Remarks / Notes
+              </label>
+              <textarea
+                data-fo="remarks"
+                {...register('notes')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    focusField('save-btn');
+                  }
+                }}
+                className="w-full bg-gray-50 dark:bg-dark-900 border border-gray-200 dark:border-dark-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-[#B8860B]/30 outline-none h-20 italic resize-none"
+                placeholder="Write additional terms, special instructions..."
+              />
+            </div>
+
+            {/* SECTION 7: Actions */}
+            <div className="flex flex-col-reverse md:flex-row justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="w-full md:w-auto px-10 py-3.5 bg-gray-500 hover:bg-gray-600 text-white rounded-lg font-bold text-xs uppercase tracking-widest transition-all min-h-[52px] focus:ring-2 focus:ring-[#B8860B]/20 outline-none"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                data-fo="save-btn"
+                disabled={createMutation.isPending || updateMutation.isPending}
+                className="w-full md:w-auto justify-center bg-[#B8860B] hover:bg-[#8B6508] text-white px-10 py-3.5 rounded-lg font-bold uppercase tracking-widest text-xs flex items-center gap-2 shadow-lg shadow-[#B8860B]/20 transition-all min-h-[52px] focus:ring-2 focus:ring-offset-2 focus:ring-[#B8860B] outline-none"
+              >
+                {createMutation.isPending || updateMutation.isPending ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Save size={16} />
+                )}
+                {isEditing ? 'Update Invoice' : 'Save Invoice'}
+              </button>
+            </div>
+          </div>
         </div>
       </form>
 
-      {/* Confirmation Dialog */}
       <ConfirmDialog
         isOpen={isConfirmOpen}
         onClose={() => setIsConfirmOpen(false)}
         onConfirm={handleConfirmSave}
         title={isEditing ? 'Update Invoice' : 'Save Invoice'}
-        message={isEditing ? 'Are you sure you want to update this invoice? This will override existing records.' : 'Are you sure you want to save and generate this invoice?'}
+        message={
+          isEditing
+            ? 'Update this invoice and override existing records?'
+            : 'Save and generate this invoice?'
+        }
         confirmText={isEditing ? 'Update' : 'Save'}
         cancelText="Cancel"
       />
     </div>
   );
 };
-

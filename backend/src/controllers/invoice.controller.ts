@@ -19,7 +19,7 @@ const createInvoiceSchema = z.object({
   invoiceDate: z.string().min(1, 'Invoice date is required'),
   dueDate: z.string().optional().nullable(),
   items: z.array(invoiceItemSchema).min(1, 'At least one item is required'),
-  gstPercent: z.number().min(0).max(100).default(3),
+  gstPercent: z.number().min(0).max(100).default(0),
   additionalDiscount: z.number().min(0).default(0),
   discount: z.number().min(0).optional(),
   notes: z.string().optional().nullable(),
@@ -156,8 +156,6 @@ export const createInvoice = async (req: Request, res: Response) => {
       return res.status(404).json(errorResponse('Customer not found'));
     }
 
-    const invoiceNumber = await generateNextInvoiceNumber();
-
     let subtotal = 0;
     const itemsData = items.map((item, index) => {
       const lineTotal =
@@ -175,29 +173,55 @@ export const createInvoice = async (req: Request, res: Response) => {
     const gstAmount = (subtotal - additionalDiscount) * (gstPercent / 100);
     const grandTotal = subtotal - additionalDiscount + gstAmount;
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        invoiceNumber,
-        invoiceDate: new Date(invoiceDate),
-        dueDate: dueDate ? new Date(dueDate) : null,
-        customerId,
-        subtotal,
-        gstPercent,
-        gstAmount,
-        additionalDiscount,
-        grandTotal,
-        notes,
-        terms,
-        status: InvoiceStatus.UNPAID,
-        items: {
-          create: itemsData,
-        },
-      },
-      include: {
-        customer: true,
-        items: true,
-      },
-    });
+    // Retry loop — handles P2002 unique constraint race on invoiceNumber
+    let invoice = null;
+    let attempts = 0;
+    let invoiceNumber = await generateNextInvoiceNumber();
+
+    while (attempts < 5) {
+      try {
+        invoice = await prisma.invoice.create({
+          data: {
+            invoiceNumber,
+            invoiceDate: new Date(invoiceDate),
+            dueDate: dueDate ? new Date(dueDate) : null,
+            customerId,
+            subtotal,
+            gstPercent,
+            gstAmount,
+            additionalDiscount,
+            grandTotal,
+            notes,
+            terms,
+            status: InvoiceStatus.UNPAID,
+            items: {
+              create: itemsData,
+            },
+          },
+          include: {
+            customer: true,
+            items: true,
+          },
+        });
+        break; // success
+      } catch (err: any) {
+        if (err?.code === 'P2002' && err?.meta?.target?.includes('invoiceNumber')) {
+          // Collision — bump the sequence and retry
+          attempts++;
+          const parts = invoiceNumber.split('-');
+          const seq = parseInt(parts[parts.length - 1], 10) || 0;
+          const year = parts[1];
+          invoiceNumber = `INV-${year}-${(seq + 1).toString().padStart(4, '0')}`;
+          console.warn(`[createInvoice] invoiceNumber collision, retrying with ${invoiceNumber} (attempt ${attempts})`);
+        } else {
+          throw err; // re-throw non-collision errors
+        }
+      }
+    }
+
+    if (!invoice) {
+      return res.status(500).json(errorResponse('Failed to generate a unique invoice number after multiple attempts'));
+    }
 
     return res.status(201).json(successResponse(invoice));
   } catch (error) {
@@ -205,6 +229,7 @@ export const createInvoice = async (req: Request, res: Response) => {
     return res.status(500).json(errorResponse('Failed to create invoice'));
   }
 };
+
 
 export const updateInvoice = async (req: Request, res: Response) => {
   const id = req.params.id as string;

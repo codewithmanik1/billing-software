@@ -120,4 +120,5 @@ enum PaymentMode {
   BANK_TRANSFER
   CHEQUE
   CARD
+  OLD_GOLD
 }
