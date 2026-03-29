@@ -10,6 +10,7 @@ export const useEnterKeyNavigation = (
     if (!container) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       if (e.key === 'Enter') {
         const target = e.target as HTMLElement;
         

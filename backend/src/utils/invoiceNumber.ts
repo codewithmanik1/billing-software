@@ -4,6 +4,7 @@ export const generateNextInvoiceNumber = async (): Promise<string> => {
   const currentYear = new Date().getFullYear();
   const yearPrefix = `INV-${currentYear}-`;
 
+  // Sort by createdAt so we always get the truly most-recent invoice
   const lastInvoice = await prisma.invoice.findFirst({
     where: {
       invoiceNumber: {
@@ -11,14 +12,15 @@ export const generateNextInvoiceNumber = async (): Promise<string> => {
       },
     },
     orderBy: {
-      invoiceNumber: 'desc',
+      createdAt: 'desc',
     },
+    select: { invoiceNumber: true },
   });
 
   let nextSeq = 1;
   if (lastInvoice) {
     const parts = lastInvoice.invoiceNumber.split('-');
-    const lastSeq = parseInt(parts[2], 10);
+    const lastSeq = parseInt(parts[parts.length - 1], 10);
     if (!isNaN(lastSeq)) {
       nextSeq = lastSeq + 1;
     }
