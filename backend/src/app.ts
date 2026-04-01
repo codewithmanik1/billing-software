@@ -14,9 +14,11 @@ import profileRoutes from './routes/profile.routes';
 
 const app = express();
 
-app.use(cors({ 
-  origin: true, 
-  credentials: true 
+app.set('trust proxy', 1);
+
+app.use(cors({
+  origin: true,
+  credentials: true
 }));
 app.use(morgan('dev'));
 app.use(express.json());
