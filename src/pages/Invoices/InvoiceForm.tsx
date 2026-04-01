@@ -156,6 +156,7 @@ export const InvoiceForm: React.FC = () => {
           discount: Number(item.discount || 0),
           lineTotal: Number(item.lineTotal || item.amount || 0),
         })),
+        payments: [],
         discount: Number(
           existingInvoice.additionalDiscount || existingInvoice.discount || 0
         ),
@@ -275,15 +276,19 @@ export const InvoiceForm: React.FC = () => {
     }
     const { payments, discount, items, ...rest } = pendingData;
 
-    // Sanitize items — API expects no lineTotal / id / extra fields
-    const sanitizedItems = items.map(({ description, metalType, weightGrams, ratePerGram, makingCharges, discount: itemDiscount }) => ({
-      description,
-      metalType,
-      weightGrams: Number(weightGrams) || 0,
-      ratePerGram: Number(ratePerGram) || 0,
-      makingCharges: Number(makingCharges) || 0,
-      discount: Number(itemDiscount) || 0,
-    }));
+    // Sanitize items — keep id only when editing
+    const sanitizedItems = items.map((item: any) => {
+      const { id: itemId, description, metalType, weightGrams, ratePerGram, makingCharges, discount: itemDiscount } = item;
+      return {
+        ...(isEditing && itemId ? { id: itemId } : {}),
+        description,
+        metalType,
+        weightGrams: Number(weightGrams) || 0,
+        ratePerGram: Number(ratePerGram) || 0,
+        makingCharges: Number(makingCharges) || 0,
+        discount: Number(itemDiscount) || 0,
+      };
+    });
 
     const invoicePayload = {
       ...rest,

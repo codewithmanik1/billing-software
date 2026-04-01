@@ -8,7 +8,7 @@ const paymentSchema = z.object({
   invoiceId: z.string().min(1, 'Invoice ID is required'),
   paymentDate: z.string().min(1, 'Payment date is required'),
   amount: z.number().positive('Amount must be greater than 0'),
-  paymentMode: z.enum(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD']),
+  paymentMode: z.enum(['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'CARD', 'OLD_GOLD']),
   referenceNumber: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
