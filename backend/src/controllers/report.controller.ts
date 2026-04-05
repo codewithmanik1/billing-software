@@ -54,31 +54,35 @@ export const getSummary = async (req: Request, res: Response) => {
 };
 
 export const getOutstanding = async (req: Request, res: Response) => {
-  const { page = '1', limit = '10' } = req.query;
+  const { page = '1', limit = '10', search, minAmount, maxAmount } = req.query;
   const pageNum = Math.max(1, Number(page));
   const limitNum = Math.max(1, Number(limit));
-  const skip = (pageNum - 1) * limitNum;
 
   try {
     const where: Prisma.InvoiceWhereInput = { status: { not: InvoiceStatus.PAID } };
-    const [invoices, total] = await prisma.$transaction([
-      prisma.invoice.findMany({
-        where,
-        include: {
-          customer: { select: { name: true, phone: true } },
-          payments: { select: { amount: true } },
-        },
-        skip,
-        take: limitNum,
-        orderBy: { invoiceDate: 'asc' },
-      }),
-      prisma.invoice.count({ where }),
-    ]);
+    
+    if (search) {
+      where.OR = [
+        { invoiceNumber: { contains: String(search), mode: 'insensitive' } },
+        { customer: { name: { contains: String(search), mode: 'insensitive' } } },
+        { customer: { phone: { contains: String(search), mode: 'insensitive' } } },
+      ];
+    }
 
-    const formatted = invoices.map((inv) => {
+    const allInvoices = await prisma.invoice.findMany({
+      where,
+      include: {
+        customer: { select: { name: true, phone: true } },
+        payments: { select: { amount: true } },
+      },
+      orderBy: { invoiceDate: 'asc' },
+    });
+
+    let formatted = allInvoices.map((inv) => {
       const paid = inv.payments.reduce((sum, p) => sum + Number(p.amount), 0);
       const diff = new Date().getTime() - inv.invoiceDate.getTime();
       const daysPending = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const pendingBalance = Number(inv.grandTotal) - paid;
 
       return {
         id: inv.id,
@@ -87,14 +91,27 @@ export const getOutstanding = async (req: Request, res: Response) => {
         status: inv.status,
         grandTotal: inv.grandTotal,
         totalPaid: paid,
-        pendingBalance: Number(inv.grandTotal) - paid,
+        pendingBalance,
         customer: inv.customer,
         daysPending,
       };
     });
 
+    if (minAmount) {
+      const min = Number(minAmount);
+      if (!isNaN(min)) formatted = formatted.filter(inv => inv.pendingBalance >= min);
+    }
+    if (maxAmount) {
+      const max = Number(maxAmount);
+      if (!isNaN(max)) formatted = formatted.filter(inv => inv.pendingBalance <= max);
+    }
+
+    const total = formatted.length;
+    const skip = (pageNum - 1) * limitNum;
+    const paginated = formatted.slice(skip, skip + limitNum);
+
     return res.json(successResponse({
-      invoices: formatted,
+      invoices: paginated,
       pagination: {
         total,
         page: pageNum,

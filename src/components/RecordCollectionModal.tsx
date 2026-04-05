@@ -10,7 +10,7 @@ import { useEnterKeyNavigation } from '../lib/useEnterKeyNavigation';
 const paymentSchema = z.object({
   paymentDate: z.string(),
   amount: z.number().min(1, 'Amount must be greater than 0'),
-  paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE']),
+  paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'OLD_GOLD', 'OLD_SILVER', 'FINE_GOLD', 'FINE_SILVER']),
   referenceNumber: z.string().optional(),
   notes: z.string().optional()
 });
@@ -88,6 +88,10 @@ export const RecordCollectionModal: React.FC<RecordCollectionModalProps> = ({
               <option value="CARD">Debit/Credit Card</option>
               <option value="BANK_TRANSFER">NEFT/IMPS Transfer</option>
               <option value="CHEQUE">Cheque / demand Draft</option>
+              <option value="OLD_GOLD">Old Gold</option>
+              <option value="OLD_SILVER">Old Silver</option>
+              <option value="FINE_GOLD">Fine Gold</option>
+              <option value="FINE_SILVER">Fine Silver</option>
             </select>
             {errors.paymentMode && <p className="text-red-500 text-[10px] font-bold">{errors.paymentMode.message}</p>}
           </div>
