@@ -13,7 +13,7 @@ async function main() {
   await prisma.shopProfile.deleteMany();
 
   // 2. Create Admin User
-  const hashedPassword = await bcrypt.hash('Shree@1984', 10);
+  const hashedPassword = await bcrypt.hash('admin', 10);
   await prisma.user.create({
     data: {
       username: 'admin',
@@ -52,7 +52,7 @@ async function main() {
 
   // 4. Create Invoices
   // Simplified seeding for focus areas mentioned in spec
-  
+
   // INV-2024-001 (Rajesh Sharma, PAID, ₹1,81,023)
   await prisma.invoice.create({
     data: {
@@ -106,19 +106,19 @@ async function main() {
   // INV-2024-005 (Rajesh Sharma, UNPAID, 18K Gold Earrings)
   await prisma.invoice.create({
     data: {
-        invoiceNumber: 'INV-2024-005',
-        invoiceDate: new Date('2026-03-15'),
-        customerId: createdCustomers['Rajesh Sharma'],
-        subtotal: 48000,
-        gstPercent: 3,
-        gstAmount: 1440,
-        grandTotal: 49440,
-        status: InvoiceStatus.UNPAID,
-        items: {
-          create: [
-            { description: '18K Gold Earrings', metalType: '18K', weightGrams: 8, ratePerGram: 5500, makingCharges: 4000, lineTotal: 48000 }
-          ]
-        }
+      invoiceNumber: 'INV-2024-005',
+      invoiceDate: new Date('2026-03-15'),
+      customerId: createdCustomers['Rajesh Sharma'],
+      subtotal: 48000,
+      gstPercent: 3,
+      gstAmount: 1440,
+      grandTotal: 49440,
+      status: InvoiceStatus.UNPAID,
+      items: {
+        create: [
+          { description: '18K Gold Earrings', metalType: '18K', weightGrams: 8, ratePerGram: 5500, makingCharges: 4000, lineTotal: 48000 }
+        ]
+      }
     }
   });
 

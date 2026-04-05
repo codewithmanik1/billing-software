@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../lib/api';
-import { TrendingUp, TrendingDown, Calendar, Loader2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, Calendar, Loader2, Search, IndianRupee } from 'lucide-react';
 import {
   format, subDays, startOfMonth, endOfMonth, startOfYear
 } from 'date-fns';
@@ -52,6 +52,9 @@ export const Reports: React.FC = () => {
   // Pagination for outstanding invoices
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [outSearchTerm, setOutSearchTerm] = useState('');
+  const [minAmount, setMinAmount] = useState('');
+  const [maxAmount, setMaxAmount] = useState('');
 
   // Fetching Report Summary (KPIs)
   const { data: summaryRes, isLoading: isLoadingSummary } = useQuery({
@@ -64,9 +67,13 @@ export const Reports: React.FC = () => {
 
   // Fetching Outstanding Invoices (UNPAID + PARTIAL)
   const { data: outstandingRes, isLoading: isLoadingOutstanding } = useQuery({
-    queryKey: ['reports-outstanding', currentPage, itemsPerPage],
+    queryKey: ['reports-outstanding', currentPage, itemsPerPage, outSearchTerm, minAmount, maxAmount],
     queryFn: async () => {
-      const res = await api.get(`/reports/outstanding?page=${currentPage}&limit=${itemsPerPage}`);
+      let url = `/reports/outstanding?page=${currentPage}&limit=${itemsPerPage}`;
+      if (outSearchTerm) url += `&search=${encodeURIComponent(outSearchTerm)}`;
+      if (minAmount) url += `&minAmount=${encodeURIComponent(minAmount)}`;
+      if (maxAmount) url += `&maxAmount=${encodeURIComponent(maxAmount)}`;
+      const res = await api.get(url);
       return res.data;
     },
   });
@@ -199,10 +206,51 @@ export const Reports: React.FC = () => {
 
       {/* Outstanding Invoices Table */}
       <div className="card p-0 rounded-2xl shadow-2xl overflow-hidden border-gray-100">
-        <div className="p-6 border-b border-gray-100 dark:border-dark-800 flex justify-between items-center bg-gray-50/50 dark:bg-dark-900">
+        <div className="p-6 border-b border-gray-100 dark:border-dark-800 flex flex-col md:flex-row justify-between items-start md:items-center bg-gray-50/50 dark:bg-dark-900 gap-4">
           <h2 className="text-xl font-bold text-[#1A1209] dark:text-[#F5F5F0] flex items-center gap-2">
             Outstanding Payments
           </h2>
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+             <div className="relative w-full sm:w-[220px] shrink-0">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                  <Search size={18} />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Invoice # or Name..."
+                  value={outSearchTerm}
+                  onChange={(e) => { setOutSearchTerm(e.target.value); setCurrentPage(1); }}
+                  className="input-field pl-11 py-2 bg-white dark:bg-dark-900 text-xs"
+                />
+             </div>
+             <div className="flex items-center gap-2">
+               <div className="relative w-24 shrink-0">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                    <IndianRupee size={12} />
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="Min"
+                    value={minAmount}
+                    onChange={(e) => { setMinAmount(e.target.value); setCurrentPage(1); }}
+                    className="input-field pl-7 py-2 bg-white dark:bg-dark-900 text-xs font-mono"
+                  />
+               </div>
+               <span className="text-gray-400 text-xs font-bold">-</span>
+               <div className="relative w-24 shrink-0">
+                  <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+                    <IndianRupee size={12} />
+                  </div>
+                  <input
+                    type="number"
+                    placeholder="Max"
+                    value={maxAmount}
+                    onChange={(e) => { setMaxAmount(e.target.value); setCurrentPage(1); }}
+                    className="input-field pl-7 py-2 bg-white dark:bg-dark-900 text-xs font-mono"
+                  />
+               </div>
+             </div>
+          </div>
         </div>
         
         <div className="overflow-x-auto min-h-[300px]">

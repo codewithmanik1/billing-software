@@ -28,7 +28,7 @@ const invoiceItemSchema = z.object({
 const paymentSchema = z.object({
   paymentDate: z.string(),
   amount: z.number().min(0.01, 'Amount > 0'),
-  paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'OLD_GOLD']),
+  paymentMode: z.enum(['CASH', 'UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE', 'OLD_GOLD', 'OLD_SILVER', 'FINE_GOLD', 'FINE_SILVER']),
   referenceNumber: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -57,6 +57,9 @@ const PAYMENT_MODES = [
   { value: 'BANK_TRANSFER', label: 'Bank Transfer' },
   { value: 'CHEQUE', label: 'Cheque' },
   { value: 'OLD_GOLD', label: 'Old Gold' },
+  { value: 'OLD_SILVER', label: 'Old Silver' },
+  { value: 'FINE_GOLD', label: 'Fine Gold' },
+  { value: 'FINE_SILVER', label: 'Fine Silver' },
 ] as const;
 
 // ─── Focus helpers ─────────────────────────────────────────────────────────────
