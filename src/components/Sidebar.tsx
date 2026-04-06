@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, FileText, LogOut,
-  PieChart, ChevronLeft, ChevronRight, Menu, X, Building2
+  PieChart, ChevronLeft, ChevronRight, Menu, X, Building2, Coins
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useProfile } from '../context/ProfileContext';
@@ -13,6 +13,7 @@ const navItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Customers', path: '/customers', icon: Users },
   { name: 'Invoices', path: '/invoices', icon: FileText },
+  { name: 'Bishi', path: '/bishi', icon: Coins },
   { name: 'Reports', path: '/reports', icon: PieChart },
   { name: 'Profile', path: '/profile', icon: Building2 },
 ];

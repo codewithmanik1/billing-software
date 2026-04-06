@@ -43,8 +43,99 @@ model Customer {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   invoices  Invoice[]
+  bishiMembers BishiMember[]
 
   @@map("customers")
+}
+
+model Bishi {
+  id               Int           @id @default(autoincrement())
+  name             String
+  startDate        DateTime
+  durationMonths   Int
+  monthlyAmount    Decimal       @db.Decimal(10, 2)
+  winnersPerMonth  Int           @default(1)
+  status           BishiStatus   @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  members          BishiMember[]
+  payments         BishiPayment[]
+  winners          BishiWinner[]
+
+  @@map("bishis")
+}
+
+model BishiMember {
+  id               Int           @id @default(autoincrement())
+  bishiId          Int
+  bishi            Bishi         @relation(fields: [bishiId], references: [id], onDelete: Cascade)
+  customerId       String
+  customer         Customer      @relation(fields: [customerId], references: [id])
+  memberNumber     Int
+  status           BishiMemberStatus @default(ACTIVE)
+  wonMonthNumber   Int?
+  wonDate          DateTime?
+  joinedAt         DateTime      @default(now())
+  payments         BishiPayment[]
+  winners          BishiWinner[]
+
+  @@unique([bishiId, customerId])
+  @@map("bishi_members")
+}
+
+model BishiPayment {
+  id                 Int           @id @default(autoincrement())
+  bishiId            Int
+  bishi              Bishi         @relation(fields: [bishiId], references: [id])
+  bishiMemberId      Int
+  bishiMember        BishiMember   @relation(fields: [bishiMemberId], references: [id])
+  monthNumber        Int
+  monthLabel         String
+  amountDue          Decimal       @db.Decimal(10, 2)
+  dueCarriedForward  Decimal       @db.Decimal(10, 2) @default(0)
+  totalPayable       Decimal       @db.Decimal(10, 2)
+  amountPaid         Decimal       @db.Decimal(10, 2) @default(0)
+  totalOutstanding   Decimal       @db.Decimal(10, 2)
+  paymentDate        DateTime?
+  status             BishiPaymentStatus @default(PENDING)
+  paymentMode        PaymentMode?
+  notes              String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@map("bishi_payments")
+}
+
+model BishiWinner {
+  id               Int           @id @default(autoincrement())
+  bishiId          Int
+  bishi            Bishi         @relation(fields: [bishiId], references: [id])
+  bishiMemberId    Int
+  bishiMember      BishiMember   @relation(fields: [bishiMemberId], references: [id])
+  monthNumber      Int
+  monthLabel       String
+  announcedAt      DateTime      @default(now())
+  announcedBy      String
+
+  @@map("bishi_winners")
+}
+
+enum BishiStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum BishiMemberStatus {
+  ACTIVE
+  WON
+}
+
+enum BishiPaymentStatus {
+  PAID
+  PARTIAL
+  DUE
+  EXEMPT
+  PENDING
 }
 
 model Invoice {

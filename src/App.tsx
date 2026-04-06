@@ -10,7 +10,10 @@ import {
   InvoiceForm,
   InvoiceDetail,
   Reports,
-  Profile
+  Profile,
+  BishiList,
+  BishiCreate,
+  BishiDetail
 } from './pages';
 import { ThemeProvider } from './context/ThemeContext';
 import { ProfileProvider } from './context/ProfileContext';
@@ -33,6 +36,9 @@ function App() {
               <Route path="invoices/:id" element={<InvoiceDetail />} />
               <Route path="reports" element={<Reports />} />
               <Route path="profile" element={<Profile />} />
+              <Route path="bishi" element={<BishiList />} />
+              <Route path="bishi/create" element={<BishiCreate />} />
+              <Route path="bishi/:id" element={<BishiDetail />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Routes>

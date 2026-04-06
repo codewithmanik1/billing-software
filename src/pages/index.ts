@@ -6,3 +6,6 @@ export * from './Invoices/InvoiceList';
 export * from './Invoices/InvoiceForm';
 export * from './Invoices/InvoiceDetail';
 export * from './Profile';
+export * from './Bishi/BishiList';
+export * from './Bishi/BishiCreate';
+export * from './Bishi/BishiDetail';
