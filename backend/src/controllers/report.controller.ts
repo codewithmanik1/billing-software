@@ -12,11 +12,17 @@ export const getSummary = async (req: Request, res: Response) => {
       where.invoiceDate = {};
       if (fromDate) {
         const d = new Date(String(fromDate));
-        if (!isNaN(d.getTime())) (where.invoiceDate as Prisma.DateTimeFilter).gte = d;
+        if (!isNaN(d.getTime())) {
+          d.setHours(0, 0, 0, 0);
+          (where.invoiceDate as Prisma.DateTimeFilter).gte = d;
+        }
       }
       if (toDate) {
         const d = new Date(String(toDate));
-        if (!isNaN(d.getTime())) (where.invoiceDate as Prisma.DateTimeFilter).lte = d;
+        if (!isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          (where.invoiceDate as Prisma.DateTimeFilter).lte = d;
+        }
       }
     }
 
@@ -54,12 +60,30 @@ export const getSummary = async (req: Request, res: Response) => {
 };
 
 export const getOutstanding = async (req: Request, res: Response) => {
-  const { page = '1', limit = '10', search, minAmount, maxAmount } = req.query;
+  const { page = '1', limit = '10', search, minAmount, maxAmount, fromDate, toDate } = req.query;
   const pageNum = Math.max(1, Number(page));
   const limitNum = Math.max(1, Number(limit));
 
   try {
     const where: Prisma.InvoiceWhereInput = { status: { not: InvoiceStatus.PAID } };
+
+    if (fromDate || toDate) {
+      where.invoiceDate = {};
+      if (fromDate) {
+        const d = new Date(String(fromDate));
+        if (!isNaN(d.getTime())) {
+          d.setHours(0, 0, 0, 0);
+          (where.invoiceDate as Prisma.DateTimeFilter).gte = d;
+        }
+      }
+      if (toDate) {
+        const d = new Date(String(toDate));
+        if (!isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          (where.invoiceDate as Prisma.DateTimeFilter).lte = d;
+        }
+      }
+    }
     
     if (search) {
       where.OR = [

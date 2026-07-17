@@ -1,15 +1,36 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../../lib/api';
-import { Coins, Plus, Loader2, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { Coins, Plus, Loader2, ChevronRight, TrendingUp, TrendingDown, Edit2, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { EditBishiModal } from './modals/EditBishiModal';
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 
 export const BishiList: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const [editingBishi, setEditingBishi] = useState<any>(null);
+  const [deletingBishi, setDeletingBishi] = useState<any>(null);
+
+  const deleteBishiMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await api.delete(`/bishi/${id}`);
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Bishi scheme deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['bishis'] });
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || 'Failed to delete Bishi scheme');
+    }
+  });
 
   const { data: bishiRes, isLoading } = useQuery({
     queryKey: ['bishis'],
@@ -145,13 +166,29 @@ export const BishiList: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-8 py-4 text-right">
-                      <Link
-                        to={`/bishi/${bishi.id}`}
-                        className="inline-flex items-center gap-1 text-[#B8860B] font-bold text-xs hover:underline"
-                      >
-                        VIEW DETAILS
-                        <ChevronRight size={14} />
-                      </Link>
+                      <div className="flex items-center justify-end gap-3">
+                        <Link
+                          to={`/bishi/${bishi.id}`}
+                          className="inline-flex items-center gap-1 text-[#B8860B] font-bold text-xs hover:underline"
+                        >
+                          VIEW DETAILS
+                          <ChevronRight size={14} />
+                        </Link>
+                        <button
+                          onClick={() => setEditingBishi(bishi)}
+                          className="p-1.5 text-gray-500 hover:text-[#B8860B] hover:bg-[#FFF8E7] rounded-lg transition-all"
+                          title="Edit Scheme"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button
+                          onClick={() => setDeletingBishi(bishi)}
+                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-all"
+                          title="Delete Scheme"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -168,6 +205,26 @@ export const BishiList: React.FC = () => {
           )}
         </div>
       </div>
+
+      {editingBishi && (
+        <EditBishiModal
+          isOpen={editingBishi !== null}
+          onClose={() => setEditingBishi(null)}
+          bishi={editingBishi}
+        />
+      )}
+
+      <ConfirmDialog
+        isOpen={deletingBishi !== null}
+        onClose={() => setDeletingBishi(null)}
+        onConfirm={() => {
+          if (deletingBishi) deleteBishiMutation.mutate(deletingBishi.id);
+        }}
+        title="Delete Bishi Scheme"
+        message="Are you sure you want to delete this scheme? All member and payment records will be permanently removed. This action cannot be undone."
+        confirmText="Yes, Delete"
+        isDestructive={true}
+      />
     </div>
   );
 };
