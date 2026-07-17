@@ -67,9 +67,9 @@ export const Reports: React.FC = () => {
 
   // Fetching Outstanding Invoices (UNPAID + PARTIAL)
   const { data: outstandingRes, isLoading: isLoadingOutstanding } = useQuery({
-    queryKey: ['reports-outstanding', currentPage, itemsPerPage, outSearchTerm, minAmount, maxAmount],
+    queryKey: ['reports-outstanding', currentPage, itemsPerPage, outSearchTerm, minAmount, maxAmount, appliedStart, appliedEnd],
     queryFn: async () => {
-      let url = `/reports/outstanding?page=${currentPage}&limit=${itemsPerPage}`;
+      let url = `/reports/outstanding?page=${currentPage}&limit=${itemsPerPage}&fromDate=${appliedStart}&toDate=${appliedEnd}`;
       if (outSearchTerm) url += `&search=${encodeURIComponent(outSearchTerm)}`;
       if (minAmount) url += `&minAmount=${encodeURIComponent(minAmount)}`;
       if (maxAmount) url += `&maxAmount=${encodeURIComponent(maxAmount)}`;

@@ -254,11 +254,25 @@ export const deleteBishi = async (req: Request, res: Response) => {
   if (isNaN(id)) return res.status(400).json(errorResponse('Invalid Bishi ID'));
 
   try {
-    const paymentsCount = await bishiPaymentModel.count({ where: { bishiId: id } });
-    if (paymentsCount > 0) {
+    // Check if there are any payments made
+    const actualPaymentsCount = await bishiPaymentModel.count({
+      where: {
+        bishiId: id,
+        amountPaid: { gt: 0 }
+      }
+    });
+
+    if (actualPaymentsCount > 0) {
       return res.status(400).json(errorResponse('Cannot delete Bishi with existing payments.'));
     }
-    await bishiModel.delete({ where: { id: id } });
+
+    // Use a transaction to delete dependent records first
+    await prisma.$transaction([
+      bishiPaymentModel.deleteMany({ where: { bishiId: id } }),
+      bishiWinnerModel.deleteMany({ where: { bishiId: id } }),
+      bishiModel.delete({ where: { id: id } }),
+    ]);
+
     return res.json(successResponse(null, 'Bishi deleted successfully'));
   } catch (error) {
     console.error('deleteBishi error:', error);
