@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
-import { Search, Edit2, Trash2, Loader2, UserPlus, Phone, Mail } from 'lucide-react';
+import { Search, Edit2, Trash2, Loader2, UserPlus, Phone, Mail, Award, Users, Eye, Sparkles } from 'lucide-react';
 import { Modal } from '../components/ui/Modal';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import { Pagination } from '../components/ui/Pagination';
 import { useEnterKeyNavigation } from '../lib/useEnterKeyNavigation';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { BishiMemberDetailsModal } from './Bishi/modals/BishiMemberDetailsModal';
+import { BishiMemberDashboard } from './Bishi/BishiMemberDashboard';
 
 const customerSchema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -23,6 +25,7 @@ type CustomerFormData = z.infer<typeof customerSchema>;
 
 export const Customers: React.FC = () => {
   const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<'all' | 'bishi'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -34,6 +37,10 @@ export const Customers: React.FC = () => {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Record<string, unknown> | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Bishi Member Details Modal & Full Dashboard View State
+  const [selectedBishiMember, setSelectedBishiMember] = useState<any>(null);
+  const [isMemberDetailsOpen, setIsMemberDetailsOpen] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CustomerFormData>({
     resolver: zodResolver(customerSchema)
@@ -54,6 +61,16 @@ export const Customers: React.FC = () => {
       const res = await api.get(`/customers?search=${searchTerm}&page=${currentPage}&limit=${itemsPerPage}`);
       return res.data;
     },
+    enabled: activeTab === 'all',
+  });
+
+  const { data: bishiMembers = [], isLoading: isLoadingBishiMembers } = useQuery({
+    queryKey: ['bishi-members-all', searchTerm],
+    queryFn: async () => {
+      const res = await api.get(`/bishi/all-members?search=${searchTerm}`);
+      return res.data?.data || [];
+    },
+    enabled: activeTab === 'bishi',
   });
 
   const customers = customersRes?.data?.customers || [];
@@ -133,31 +150,69 @@ export const Customers: React.FC = () => {
     }
   };
 
+  if (selectedBishiMember) {
+    return (
+      <BishiMemberDashboard
+        member={selectedBishiMember}
+        onBack={() => setSelectedBishiMember(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center bg-white dark:bg-dark-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-dark-800">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white dark:bg-dark-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-dark-800">
         <div>
           <h1 className="text-3xl font-serif text-[#1A1209] dark:text-[#F5F5F0]">Customer Directory</h1>
           <p className="text-sm text-[#6B5E4A] dark:text-[#9A9A8A] mt-1">Manage client profiles and track balances</p>
         </div>
-        <button 
-           onClick={handleOpenAdd} 
-           className="btn-primary flex items-center gap-2.5 px-6 py-3 rounded-xl shadow-lg shadow-gold/10"
-        >
-          <UserPlus size={20} />
-          <span className="font-semibold">Add New Customer</span>
-        </button>
+
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          {/* View Tab Buttons */}
+          <div className="bg-[#F5F0E8] dark:bg-dark-800 p-1.5 rounded-xl flex items-center gap-1 border border-[#E8E0D0] dark:border-dark-700">
+            <button
+              onClick={() => { setActiveTab('all'); setCurrentPage(1); }}
+              className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeTab === 'all'
+                  ? 'bg-white dark:bg-dark-900 text-[#1A1209] dark:text-[#F5F5F0] shadow-sm'
+                  : 'text-[#6B5E4A] dark:text-[#9A9A8A] hover:text-[#1A1209]'
+              }`}
+            >
+              <Users size={16} />
+              All Customers
+            </button>
+            <button
+              onClick={() => { setActiveTab('bishi'); setCurrentPage(1); }}
+              className={`px-4 py-2 rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-2 ${
+                activeTab === 'bishi'
+                  ? 'bg-[#B8860B] text-black shadow-md font-extrabold'
+                  : 'text-[#6B5E4A] dark:text-[#9A9A8A] hover:text-[#1A1209]'
+              }`}
+            >
+              <Award size={16} />
+              Bishi Members
+            </button>
+          </div>
+
+          <button 
+             onClick={handleOpenAdd} 
+             className="btn-primary flex items-center gap-2.5 px-6 py-3 rounded-xl shadow-lg shadow-gold/10 ml-auto sm:ml-0"
+          >
+            <UserPlus size={20} />
+            <span className="font-semibold">Add New Customer</span>
+          </button>
+        </div>
       </div>
 
       <div className="card p-0 flex flex-col shadow-md overflow-hidden">
-        <div className="p-5 border-b border-gray-100 dark:border-dark-800 bg-gray-50/30 dark:bg-black/10">
+        <div className="p-5 border-b border-gray-100 dark:border-dark-800 bg-gray-50/30 dark:bg-black/10 flex justify-between items-center flex-wrap gap-4">
           <div className="relative w-full max-w-md">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
               <Search size={18} />
             </div>
             <input
               type="text"
-              placeholder="Search by name or phone..."
+              placeholder={activeTab === 'bishi' ? "Search Bishi members by name or phone..." : "Search by name or phone..."}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -166,99 +221,214 @@ export const Customers: React.FC = () => {
               className="input-field pl-11 py-2.5 bg-white dark:bg-dark-900"
             />
           </div>
+
+          {activeTab === 'bishi' && (
+            <div className="text-xs font-semibold text-[#6B5E4A] dark:text-[#9A9A8A]">
+              Showing <strong className="text-[#B8860B]">{bishiMembers.length}</strong> Bishi Member(s)
+            </div>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-[#F5F0E8] dark:bg-[#0A0A0A] border-b border-[#E8E0D0] dark:border-[#2E2E2E] text-[#6B5E4A] dark:text-[#9A9A8A]">
-              <tr>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Client Identity</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Contact Info</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Purchase Info</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px] text-right">Outstanding Balance</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px] text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
-              {isLoading ? (
+        {activeTab === 'bishi' ? (
+          /* Bishi Members Table */
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-[#F5F0E8] dark:bg-[#0A0A0A] border-b border-[#E8E0D0] dark:border-[#2E2E2E] text-[#6B5E4A] dark:text-[#9A9A8A]">
                 <tr>
-                   <td colSpan={5} className="px-6 py-20 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                         <Loader2 className="w-8 h-8 text-[#B8860B] animate-spin" />
-                         <p className="text-[#9A9A8A]">Retrieving customer data...</p>
-                      </div>
-                   </td>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Member # & Scheme</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Client Identity</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Contact Info</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Winner Status</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Paid / Remaining</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px] text-center">Actions</th>
                 </tr>
-              ) : customers.length > 0 ? (
-                customers.map((customer: Record<string, unknown> & { id: string; name: string; phone: string; email?: string; gstin?: string; totalInvoices: number; totalPaid: number; outstandingBalance: number }) => (
-                  <tr key={customer.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 group">
-                    <td className="px-6 py-5">
-                       <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-base group-hover:text-[#B8860B] transition-colors">{customer.name}</div>
-                       {customer.gstin && <div className="text-[10px] text-gray-400 mt-0.5 tracking-widest uppercase">GST: {customer.gstin}</div>}
-                    </td>
-                    <td className="px-6 py-5">
-                       <div className="flex items-center gap-2 text-[#6B5E4A] dark:text-[#9A9A8A]">
-                          <Phone size={14} className="opacity-50" />
-                          <span>{customer.phone}</span>
-                       </div>
-                       {customer.email && (
-                          <div className="flex items-center gap-2 text-gray-400 text-xs mt-1">
-                             <Mail size={13} className="opacity-40" />
-                             <span className="truncate max-w-[150px]">{customer.email}</span>
-                          </div>
-                       )}
-                    </td>
-                    <td className="px-6 py-5">
-                       <div className="text-xs text-[#6B5E4A] dark:text-[#9A9A8A] font-medium">
-                          Total Invoices: <span className="text-[#B8860B]">{customer.totalInvoices}</span>
-                       </div>
-                       <div className="text-[10px] text-gray-400 mt-1">
-                          Paid: {formatCurrency(customer.totalPaid)}
-                       </div>
-                    </td>
-                    <td className="px-6 py-5 text-right font-bold text-lg">
-                        <span className={customer.outstandingBalance > 0 ? 'text-red-500' : 'text-green-500'}>
-                           {formatCurrency(customer.outstandingBalance)}
-                        </span>
-                    </td>
-                    <td className="px-6 py-5">
-                       <div className="flex justify-center gap-3">
-                        <button 
-                          onClick={() => handleOpenEdit(customer)}
-                          className="p-2.5 text-gray-400 hover:text-[#B8860B] transition-colors rounded-xl hover:bg-[#B8860B]/10"
-                          title="Edit Profile"
-                          aria-label="Edit customer"
-                        >
-                          <Edit2 size={18} />
-                        </button>
-                        <button
-                          onClick={() => { setDeletingId(customer.id); setIsDeleteOpen(true); }}
-                          className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
-                          title="Remove Customer"
-                          aria-label="Delete customer"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                       </div>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
+                {isLoadingBishiMembers ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Loader2 className="w-8 h-8 text-[#B8860B] animate-spin" />
+                        <p className="text-[#9A9A8A]">Retrieving Bishi members data...</p>
+                      </div>
                     </td>
                   </tr>
-                ))
-              ) : (
+                ) : bishiMembers.length > 0 ? (
+                  bishiMembers.map((member: any) => {
+                    const isWinner = member.status === 'WON' || !!member.wonMonthNumber;
+                    return (
+                      <tr key={member.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 group">
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-[#B8860B]/10 text-[#B8860B] font-bold text-xs px-2.5 py-1 rounded-lg">
+                              #{member.memberNumber}
+                            </span>
+                            <span className="font-bold text-[#1A1209] dark:text-[#F5F5F0]">
+                              {member.bishi?.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-base group-hover:text-[#B8860B] transition-colors">
+                            {member.customer?.name}
+                          </div>
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-2 text-[#6B5E4A] dark:text-[#9A9A8A]">
+                            <Phone size={14} className="opacity-50" />
+                            <span>{member.customer?.phone}</span>
+                          </div>
+                          {member.customer?.email && (
+                            <div className="flex items-center gap-2 text-gray-400 text-xs mt-1">
+                              <Mail size={13} className="opacity-40" />
+                              <span className="truncate max-w-[150px]">{member.customer?.email}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-5">
+                          {isWinner ? (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-amber-400 to-yellow-500 text-black shadow-sm">
+                              <Award size={13} />
+                              Winner ({member.wonMonthLabel || `Month ${member.wonMonthNumber}`})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                              Active Member
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-5">
+                          <div className="text-xs text-emerald-600 dark:text-emerald-400 font-bold">
+                            Paid: {formatCurrency(member.financials?.totalPaid || 0)}
+                          </div>
+                          <div className="text-xs text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                            Remaining: {formatCurrency(member.financials?.remainingAmount || 0)}
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 text-center">
+                          <button
+                            onClick={() => {
+                              setSelectedBishiMember(member);
+                              setIsMemberDetailsOpen(true);
+                            }}
+                            className="px-4 py-2 bg-[#B8860B]/10 hover:bg-[#B8860B] text-[#B8860B] hover:text-black rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 mx-auto"
+                            title="View Full Member Info & Payment History"
+                          >
+                            <Eye size={15} />
+                            <span>View Details</span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center text-[#9A9A8A]">
+                      <div className="flex flex-col items-center gap-2">
+                        <Award size={40} className="opacity-20 translate-y-2 mb-2" />
+                        <p className="text-base font-serif italic">No Bishi members found</p>
+                        <p className="text-xs opacity-60">Add members to a Bishi scheme from the Bishi dashboard</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          /* All Customers Table */
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-[#F5F0E8] dark:bg-[#0A0A0A] border-b border-[#E8E0D0] dark:border-[#2E2E2E] text-[#6B5E4A] dark:text-[#9A9A8A]">
                 <tr>
-                  <td colSpan={5} className="px-6 py-16 text-center text-[#9A9A8A]">
-                    <div className="flex flex-col items-center gap-2">
-                       <Search size={40} className="opacity-20 translate-y-2 -rotate-12 mb-2" />
-                       <p className="text-base font-serif italic">No clients found matching your search</p>
-                       <p className="text-xs opacity-60">Try searching for a name or phone number</p>
-                    </div>
-                  </td>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Client Identity</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Contact Info</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px]">Purchase Info</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px] text-right">Outstanding Balance</th>
+                  <th className="px-6 py-4 font-bold uppercase tracking-wider text-[11px] text-center">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        
-        {pagination.total > 0 && (
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-dark-800">
+                {isLoading ? (
+                  <tr>
+                     <td colSpan={5} className="px-6 py-20 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                           <Loader2 className="w-8 h-8 text-[#B8860B] animate-spin" />
+                           <p className="text-[#9A9A8A]">Retrieving customer data...</p>
+                        </div>
+                     </td>
+                  </tr>
+                ) : customers.length > 0 ? (
+                  customers.map((customer: Record<string, unknown> & { id: string; name: string; phone: string; email?: string; gstin?: string; totalInvoices: number; totalPaid: number; outstandingBalance: number }) => (
+                    <tr key={customer.id} className="bg-white dark:bg-[#141414] hover:bg-[#FFF8E7] dark:hover:bg-[#1F1A0E] transition-colors duration-150 group">
+                      <td className="px-6 py-5">
+                         <div className="font-bold text-[#1A1209] dark:text-[#F5F5F0] text-base group-hover:text-[#B8860B] transition-colors">{customer.name}</div>
+                         {customer.gstin && <div className="text-[10px] text-gray-400 mt-0.5 tracking-widest uppercase">GST: {customer.gstin}</div>}
+                      </td>
+                      <td className="px-6 py-5">
+                         <div className="flex items-center gap-2 text-[#6B5E4A] dark:text-[#9A9A8A]">
+                            <Phone size={14} className="opacity-50" />
+                            <span>{customer.phone}</span>
+                         </div>
+                         {customer.email && (
+                            <div className="flex items-center gap-2 text-gray-400 text-xs mt-1">
+                               <Mail size={13} className="opacity-40" />
+                               <span className="truncate max-w-[150px]">{customer.email}</span>
+                            </div>
+                         )}
+                      </td>
+                      <td className="px-6 py-5">
+                         <div className="text-xs text-[#6B5E4A] dark:text-[#9A9A8A] font-medium">
+                            Total Invoices: <span className="text-[#B8860B]">{customer.totalInvoices}</span>
+                         </div>
+                         <div className="text-[10px] text-gray-400 mt-1">
+                            Paid: {formatCurrency(customer.totalPaid)}
+                         </div>
+                      </td>
+                      <td className="px-6 py-5 text-right font-bold text-lg">
+                          <span className={customer.outstandingBalance > 0 ? 'text-red-500' : 'text-green-500'}>
+                             {formatCurrency(customer.outstandingBalance)}
+                          </span>
+                      </td>
+                      <td className="px-6 py-5">
+                         <div className="flex justify-center gap-3">
+                          <button 
+                            onClick={() => handleOpenEdit(customer)}
+                            className="p-2.5 text-gray-400 hover:text-[#B8860B] transition-colors rounded-xl hover:bg-[#B8860B]/10"
+                            title="Edit Profile"
+                            aria-label="Edit customer"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => { setDeletingId(customer.id); setIsDeleteOpen(true); }}
+                            className="p-2.5 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-red-500/10"
+                            title="Remove Customer"
+                            aria-label="Delete customer"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                         </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-16 text-center text-[#9A9A8A]">
+                      <div className="flex flex-col items-center gap-2">
+                         <Search size={40} className="opacity-20 translate-y-2 -rotate-12 mb-2" />
+                         <p className="text-base font-serif italic">No clients found matching your search</p>
+                         <p className="text-xs opacity-60">Try searching for a name or phone number</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'all' && pagination.total > 0 && (
           <div className="p-5 border-t border-gray-100 dark:border-dark-800 bg-gray-50/20">
             <Pagination
               currentPage={currentPage}
@@ -357,7 +527,15 @@ export const Customers: React.FC = () => {
         confirmText={editingCustomer ? 'Update' : 'Save'}
         cancelText="Discard"
       />
+
+      {/* Bishi Member Details Modal */}
+      <BishiMemberDetailsModal
+        isOpen={isMemberDetailsOpen}
+        onClose={() => setIsMemberDetailsOpen(false)}
+        member={selectedBishiMember}
+      />
     </div>
   );
 };
+
 

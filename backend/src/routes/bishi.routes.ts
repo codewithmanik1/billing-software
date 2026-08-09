@@ -13,6 +13,7 @@ import {
   announceWinners,
   getWinners,
   exportBishiMonth,
+  getAllBishiMembers,
 } from '../controllers/bishi.controller';
 import { protect } from '../middleware/auth.middleware';
 
@@ -23,6 +24,7 @@ router.use(protect);
 // Bishi Management
 router.post('/', createBishi);
 router.get('/', getAllBishis);
+router.get('/all-members', getAllBishiMembers);
 router.get('/:id', getBishiById);
 router.patch('/:id', updateBishi);
 router.put('/:id', updateBishi);

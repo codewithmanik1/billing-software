@@ -28,6 +28,7 @@ export const BishiDetail: React.FC = () => {
   const [winnerModalData, setWinnerModalData] = useState<any>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [memberToRemove, setMemberToRemove] = useState<number | null>(null);
+  const [winnerToRemove, setWinnerToRemove] = useState<{ monthNumber: number; monthLabel: string; name: string } | null>(null);
 
   // Fetch Bishi Info
   const { data: bishiRes, isLoading: isLoadingBishi } = useQuery({
@@ -72,10 +73,33 @@ export const BishiDetail: React.FC = () => {
     mutationFn: async (mid: number) => api.delete(`/bishi/${id}/members/${mid}`),
     onSuccess: () => {
       toast.success('Member removed');
-      queryClient.invalidateQueries({ queryKey: ['bishi', id] });
+      queryClient.invalidateQueries({ queryKey: ['bishi'] });
+      queryClient.invalidateQueries({ queryKey: ['bishi-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['bishis'] });
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.message || 'Failed to remove member');
+    }
+  });
+
+  const removeWinnerMutation = useMutation({
+    mutationFn: async (monthNumber: number) => {
+      const res = await api.post(`/bishi/${id}/winners`, {
+        monthNumber,
+        monthLabel: `Month ${monthNumber}`,
+        memberIds: []
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success('Winner removed successfully');
+      queryClient.invalidateQueries({ queryKey: ['bishi'] });
+      queryClient.invalidateQueries({ queryKey: ['bishi-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['bishis'] });
+      setWinnerToRemove(null);
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.message || 'Failed to remove winner');
     }
   });
 
@@ -230,7 +254,7 @@ export const BishiDetail: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-1">
                       {m.status === 'WON' && <Trophy size={16} className="text-amber-500 drop-shadow-sm" />}
-                      {m.status === 'ACTIVE' && bishi.status === 'ACTIVE' && (
+                      {bishi.status === 'ACTIVE' && (
                         <button 
                           onClick={() => setMemberToRemove(m.id)}
                           className="p-1 px-2 text-[10px] items-center justify-center font-bold text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -253,15 +277,25 @@ export const BishiDetail: React.FC = () => {
             </h3>
             <div className="space-y-3 relative z-10 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
               {bishi.winners?.length > 0 ? bishi.winners.map((w: any) => (
-                <div key={w.id} className="flex items-center gap-3 border-b border-white/10 pb-3 last:border-0">
+                <div key={w.id} className="flex items-center gap-3 border-b border-white/10 pb-3 last:border-0 group">
                   <span className="text-[10px] font-bold text-amber-500 bg-white/10 w-7 h-7 flex items-center justify-center rounded-xl border border-white/5">{w.monthNumber}</span>
                   <div className="flex flex-col flex-1 min-w-0">
                     <span className="text-xs font-bold truncate text-[#F5F5F0]">{w.bishiMember.customer.name}</span>
                     <span className="text-[9px] uppercase tracking-widest text-amber-500/60 font-medium">{w.monthLabel}</span>
                   </div>
-                  <Trophy size={14} className="text-white/20" />
+                  <button
+                    onClick={() => setWinnerToRemove({
+                      monthNumber: w.monthNumber,
+                      monthLabel: w.monthLabel,
+                      name: w.bishiMember.customer.name
+                    })}
+                    className="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg transition-all opacity-80 group-hover:opacity-100"
+                    title="Remove Winner"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
-)) : (
+              )) : (
                 <p className="text-[10px] text-[#6B5E4A] italic uppercase py-4 text-center">No winners announced yet.</p>
               )}
             </div>
@@ -312,17 +346,16 @@ export const BishiDetail: React.FC = () => {
                 </button>
                 {bishi.status === 'ACTIVE' && (
                   <button 
-                    disabled={selectedMonth < (bishi.currentMonthNumber || 1)}
                     onClick={() => setWinnerModalData({
                       monthNumber: selectedMonth,
                       monthLabel: paymentData?.monthLabel,
                       eligibleMembers: bishi.members,
                       winnersPerMonth: bishi.winnersPerMonth
                     })}
-                    className="flex-1 xl:flex-none flex items-center justify-center gap-2 h-10 px-6 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-amber-500/20 whitespace-nowrap"
+                    className="flex-1 xl:flex-none flex items-center justify-center gap-2 h-10 px-6 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg shadow-amber-500/20 whitespace-nowrap"
                   >
                     <Trophy size={16} />
-                    {selectedMonth < (bishi.currentMonthNumber || 1) ? 'Locked' : 'Announce Winner'}
+                    Announce Winner
                   </button>
                 )}
               </div>
@@ -511,8 +544,20 @@ export const BishiDetail: React.FC = () => {
           if (memberToRemove) removeMemberMutation.mutate(memberToRemove);
         }}
         title="Remove Member"
-        message="Remove this member from the scheme? This only works if the member has no recorded payments."
+        message="Are you sure you want to remove this member from the scheme? All of their payment and winner records for this scheme will be permanently deleted."
         confirmText="Yes, Remove"
+        isDestructive={true}
+      />
+
+      <ConfirmDialog
+        isOpen={winnerToRemove !== null}
+        onClose={() => setWinnerToRemove(null)}
+        onConfirm={() => {
+          if (winnerToRemove) removeWinnerMutation.mutate(winnerToRemove.monthNumber);
+        }}
+        title="Remove Winner"
+        message={`Are you sure you want to remove ${winnerToRemove?.name || 'the winner'} for ${winnerToRemove?.monthLabel || 'this month'}? The member will revert to active status and future dues will be updated.`}
+        confirmText="Yes, Remove Winner"
         isDestructive={true}
       />
     </div>

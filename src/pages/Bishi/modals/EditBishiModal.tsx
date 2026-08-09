@@ -50,7 +50,8 @@ export const EditBishiModal: React.FC<EditBishiModalProps> = ({ isOpen, onClose,
     },
     onSuccess: () => {
       toast.success('Bishi scheme updated successfully!');
-      queryClient.invalidateQueries({ queryKey: ['bishi', String(bishi.id)] });
+      queryClient.invalidateQueries({ queryKey: ['bishi'] });
+      queryClient.invalidateQueries({ queryKey: ['bishi-payments'] });
       queryClient.invalidateQueries({ queryKey: ['bishis'] });
       onClose();
     },

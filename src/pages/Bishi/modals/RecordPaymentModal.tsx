@@ -53,8 +53,9 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
     },
     onSuccess: () => {
       toast.success(isEdit ? 'Payment updated successfully!' : 'Payment recorded successfully!');
-      queryClient.invalidateQueries({ queryKey: ['bishi-payments', data.bishiId, data.monthNumber] });
-      queryClient.invalidateQueries({ queryKey: ['bishi', data.bishiId] });
+      queryClient.invalidateQueries({ queryKey: ['bishi-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['bishi'] });
+      queryClient.invalidateQueries({ queryKey: ['bishis'] });
       onClose();
     },
     onError: (error: any) => {
