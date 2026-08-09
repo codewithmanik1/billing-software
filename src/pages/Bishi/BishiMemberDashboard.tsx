@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Award, CheckCircle2, Clock, CreditCard, Calendar, Phone, Mail, Sparkles, TrendingUp, Wallet, User, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Award, CheckCircle2, Clock, CreditCard, Calendar, Phone, Mail, TrendingUp, Wallet, ShieldCheck } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface BishiMemberDashboardProps {
