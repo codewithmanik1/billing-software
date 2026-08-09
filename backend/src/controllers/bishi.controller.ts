@@ -291,19 +291,49 @@ export const addMembers = async (req: Request, res: Response) => {
   }
 
   try {
-    // REMOVED: Members can now be added even if payments exist. Dues will be auto-calculated.
+    const bishi = await bishiModel.findUnique({ where: { id: bishiId } });
+    if (!bishi) return res.status(404).json(errorResponse('Bishi not found'));
 
-    const currentMemberCount = await bishiMemberModel.count({ where: { bishiId: bishiId } });
+    const currentMemberCount = await bishiMemberModel.count({ where: { bishiId } });
     
-    const newMembers = await Promise.all(parsed.data.customerIds.map(async (customerId, index) => {
-      return bishiMemberModel.create({
-        data: {
-          bishiId: bishiId,
-          customerId,
-          memberNumber: currentMemberCount + index + 1,
+    const newMembers = await prisma.$transaction(async (tx) => {
+      const createdMembers = [];
+      for (let index = 0; index < parsed.data.customerIds.length; index++) {
+        const customerId = parsed.data.customerIds[index];
+        const newMember = await tx.bishiMember.create({
+          data: {
+            bishiId,
+            customerId,
+            memberNumber: currentMemberCount + index + 1,
+          }
+        });
+
+        // Initialize installment payments for Month 1 through durationMonths
+        for (let m = 1; m <= bishi.durationMonths; m++) {
+          const dueCarriedForward = (m - 1) * Number(bishi.monthlyAmount);
+          const amountDue = Number(bishi.monthlyAmount);
+          const totalPayable = m * Number(bishi.monthlyAmount);
+
+          await tx.bishiPayment.create({
+            data: {
+              bishiId,
+              bishiMemberId: newMember.id,
+              monthNumber: m,
+              monthLabel: getMonthLabel(new Date(bishi.startDate), m),
+              amountDue,
+              dueCarriedForward,
+              totalPayable,
+              amountPaid: 0,
+              totalOutstanding: totalPayable,
+              status: BishiPaymentStatus.PENDING,
+            }
+          });
         }
-      });
-    }));
+
+        createdMembers.push(newMember);
+      }
+      return createdMembers;
+    });
 
     return res.status(201).json(successResponse(newMembers));
   } catch (error) {
@@ -334,12 +364,12 @@ export const removeMember = async (req: Request, res: Response) => {
   if (isNaN(mid)) return res.status(400).json(errorResponse('Invalid Member ID'));
 
   try {
-    const paymentsCount = await bishiPaymentModel.count({ where: { bishiMemberId: mid } });
-    if (paymentsCount > 0) {
-      return res.status(400).json(errorResponse('Cannot remove member with existing payments.'));
-    }
-    await bishiMemberModel.delete({ where: { id: mid } });
-    return res.json(successResponse(null, 'Member removed successfully'));
+    await prisma.$transaction([
+      bishiPaymentModel.deleteMany({ where: { bishiMemberId: mid } }),
+      bishiWinnerModel.deleteMany({ where: { bishiMemberId: mid } }),
+      bishiMemberModel.delete({ where: { id: mid } }),
+    ]);
+    return res.json(successResponse(null, 'Member and all associated records removed successfully'));
   } catch (error) {
     console.error('removeMember error:', error);
     return res.status(500).json(errorResponse('Failed to remove member'));
@@ -555,10 +585,6 @@ export const announceWinners = async (req: Request, res: Response) => {
 
   const { monthNumber, monthLabel, memberIds } = parsed.data;
 
-  if (memberIds.length === 0) {
-    return res.status(400).json(errorResponse('No members selected'));
-  }
-
   try {
      const bishi = await bishiModel.findUnique({
        where: { id: bishiId },
@@ -566,18 +592,23 @@ export const announceWinners = async (req: Request, res: Response) => {
      });
      if (!bishi) return res.status(404).json(errorResponse('Bishi not found'));
 
-     // Compute Month Status for locking
-     const now = new Date();
-     const start = new Date(bishi.startDate);
-     const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1;
-     const currentMonthNumber = Math.max(1, Math.min(bishi.durationMonths, diffMonths));
-
-     if (monthNumber < currentMonthNumber) {
-       return res.status(400).json(errorResponse('Winner cannot be changed for past months'));
+     if (monthNumber < 1 || monthNumber > bishi.durationMonths) {
+       return res.status(400).json(errorResponse(`Invalid month number. Must be between 1 and ${bishi.durationMonths}`));
      }
 
      if (memberIds.length > bishi.winnersPerMonth) {
        return res.status(400).json(errorResponse(`Selection exceeds the limit of ${bishi.winnersPerMonth} winner(s) per month`));
+     }
+
+     // Ensure selected member hasn't won in a different month
+     for (const mid of memberIds) {
+       const member = bishi.members.find((m: any) => m.id === mid);
+       if (!member) {
+         return res.status(400).json(errorResponse(`Member ID ${mid} not found in this Bishi`));
+       }
+       if (member.status === BishiMemberStatus.WON && member.wonMonthNumber && member.wonMonthNumber !== monthNumber) {
+         return res.status(400).json(errorResponse(`${member.customerId} has already won in Month ${member.wonMonthNumber}`));
+       }
      }
 
     const updatedBishi = await prisma.$transaction(async (tx) => {
@@ -618,14 +649,25 @@ export const announceWinners = async (req: Request, res: Response) => {
              });
            }
 
-           // Revert future months' payments (unexempt)
-           await tx.bishiPayment.updateMany({
-             where: { bishiMemberId: emId, monthNumber: { gt: monthNumber } },
-             data: {
-               amountDue: Number(bishi.monthlyAmount),
-               status: BishiPaymentStatus.PENDING
-             }
-           });
+            // Revert future months' payments (unexempt)
+            const futurePayments = await tx.bishiPayment.findMany({
+              where: { bishiMemberId: emId, monthNumber: { gt: monthNumber } }
+            });
+            for (const fp of futurePayments) {
+              const restoredAmountDue = Number(bishi.monthlyAmount);
+              const restoredTotalPayable = restoredAmountDue + Number(fp.dueCarriedForward);
+              const restoredTotalOutstanding = Math.max(0, restoredTotalPayable - Number(fp.amountPaid));
+              await tx.bishiPayment.update({
+                where: { id: fp.id },
+                data: {
+                  amountDue: restoredAmountDue,
+                  totalPayable: restoredTotalPayable,
+                  totalOutstanding: restoredTotalOutstanding,
+                  status: restoredTotalOutstanding === 0 ? BishiPaymentStatus.PAID : 
+                          (Number(fp.amountPaid) > 0 ? BishiPaymentStatus.PARTIAL : BishiPaymentStatus.PENDING)
+                }
+              });
+            }
         }
 
         // Delete the old winner records
@@ -705,10 +747,15 @@ export const announceWinners = async (req: Request, res: Response) => {
       const remainingActive = await tx.bishiMember.count({
         where: { bishiId, status: BishiMemberStatus.ACTIVE }
       });
-      if (remainingActive === 0) {
+      if (remainingActive === 0 && bishi.members.length > 0) {
         await tx.bishi.update({
           where: { id: bishiId },
           data: { status: BishiStatus.COMPLETED }
+        });
+      } else {
+        await tx.bishi.update({
+          where: { id: bishiId },
+          data: { status: BishiStatus.ACTIVE }
         });
       }
 
@@ -835,3 +882,107 @@ export const exportBishiMonth = async (req: Request, res: Response) => {
     return res.status(500).send('Failed to generate report');
   }
 };
+
+export const getAllBishiMembers = async (req: Request, res: Response) => {
+  try {
+    const { search, bishiId } = req.query;
+
+    const where: any = {};
+    if (bishiId) {
+      where.bishiId = Number(bishiId);
+    }
+    if (search) {
+      where.customer = {
+        OR: [
+          { name: { contains: String(search), mode: 'insensitive' } },
+          { phone: { contains: String(search), mode: 'insensitive' } },
+        ],
+      };
+    }
+
+    const members = await bishiMemberModel.findMany({
+      where,
+      include: {
+        customer: true,
+        bishi: true,
+        payments: {
+          orderBy: { monthNumber: 'asc' },
+        },
+        winners: true,
+      },
+      orderBy: [
+        { bishiId: 'desc' },
+        { memberNumber: 'asc' }
+      ]
+    });
+
+    const formattedMembers = members.map((m: any) => {
+      const bishi = m.bishi;
+      const totalPaid = m.payments.reduce((acc: number, p: any) => acc + Number(p.amountPaid || 0), 0);
+      const totalSchemeAmount = Number(bishi.monthlyAmount) * bishi.durationMonths;
+
+      const now = new Date();
+      const start = new Date(bishi.startDate);
+      const diffMonths = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth()) + 1;
+      const currentMonthNumber = Math.max(1, Math.min(bishi.durationMonths, diffMonths));
+
+      const currentMonthPayment = m.payments.find((p: any) => p.monthNumber === currentMonthNumber);
+      const currentOutstanding = currentMonthPayment ? Number(currentMonthPayment.totalOutstanding || 0) : 0;
+
+      const isWinner = m.status === 'WON' || m.winners.length > 0;
+      const winningRecord = m.winners[0] || null;
+
+      return {
+        id: m.id,
+        bishiId: m.bishiId,
+        customerId: m.customerId,
+        memberNumber: m.memberNumber,
+        status: m.status,
+        wonMonthNumber: m.wonMonthNumber || winningRecord?.monthNumber || null,
+        wonDate: m.wonDate || winningRecord?.announcedAt || null,
+        wonMonthLabel: winningRecord?.monthLabel || (m.wonMonthNumber ? getMonthLabel(new Date(bishi.startDate), m.wonMonthNumber) : null),
+        joinedAt: m.joinedAt,
+        customer: {
+          id: m.customer.id,
+          name: m.customer.name,
+          phone: m.customer.phone,
+          email: m.customer.email,
+        },
+        bishi: {
+          id: bishi.id,
+          name: bishi.name,
+          monthlyAmount: Number(bishi.monthlyAmount),
+          durationMonths: bishi.durationMonths,
+          startDate: bishi.startDate,
+          status: bishi.status,
+        },
+        financials: {
+          totalSchemeAmount,
+          totalPaid,
+          remainingAmount: Math.max(0, totalSchemeAmount - totalPaid),
+          currentOutstanding,
+        },
+        payments: m.payments.map((p: any) => ({
+          id: p.id,
+          monthNumber: p.monthNumber,
+          monthLabel: p.monthLabel,
+          amountDue: Number(p.amountDue),
+          dueCarriedForward: Number(p.dueCarriedForward),
+          totalPayable: Number(p.totalPayable),
+          amountPaid: Number(p.amountPaid),
+          totalOutstanding: Number(p.totalOutstanding),
+          paymentDate: p.paymentDate,
+          status: p.status,
+          paymentMode: p.paymentMode,
+          notes: p.notes,
+        })),
+      };
+    });
+
+    return res.json(successResponse(formattedMembers));
+  } catch (error) {
+    console.error('getAllBishiMembers error:', error);
+    return res.status(500).json(errorResponse('Failed to fetch Bishi members'));
+  }
+};
+

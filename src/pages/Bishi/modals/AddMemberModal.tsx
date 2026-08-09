@@ -32,7 +32,9 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ bishiId, isOpen,
     },
     onSuccess: () => {
       toast.success('Members added successfully!');
-      queryClient.invalidateQueries({ queryKey: ['bishi', bishiId] });
+      queryClient.invalidateQueries({ queryKey: ['bishi'] });
+      queryClient.invalidateQueries({ queryKey: ['bishi-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['bishis'] });
       onClose();
       setSelectedIds([]);
     },

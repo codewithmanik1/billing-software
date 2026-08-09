@@ -37,9 +37,10 @@ export const AnnounceWinnerModal: React.FC<AnnounceWinnerModalProps> = ({ bishiI
       return res.data;
     },
     onSuccess: () => {
-      toast.success('Winners announced successfully!');
-      queryClient.invalidateQueries({ queryKey: ['bishi', bishiId] });
-      queryClient.invalidateQueries({ queryKey: ['bishi-payments', bishiId, data.monthNumber] });
+      toast.success('Winner updated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['bishi'] });
+      queryClient.invalidateQueries({ queryKey: ['bishi-payments'] });
+      queryClient.invalidateQueries({ queryKey: ['bishis'] });
       onClose();
       setSelectedIds([]);
     },
@@ -75,7 +76,6 @@ export const AnnounceWinnerModal: React.FC<AnnounceWinnerModalProps> = ({ bishiI
   );
 
   const onSubmit = () => {
-    if (selectedIds.length === 0) return;
     mutation.mutate({
       monthNumber: data.monthNumber,
       monthLabel: data.monthLabel,
@@ -199,12 +199,35 @@ export const AnnounceWinnerModal: React.FC<AnnounceWinnerModalProps> = ({ bishiI
             >
               Cancel
             </button>
+            {data.eligibleMembers?.some((m: any) => m.wonMonthNumber === data.monthNumber) && (
+              <button
+                type="button"
+                disabled={mutation.isPending}
+                onClick={() => {
+                  setSelectedIds([]);
+                  mutation.mutate({
+                    monthNumber: data.monthNumber,
+                    monthLabel: data.monthLabel,
+                    memberIds: [],
+                  });
+                }}
+                className="px-4 py-2.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold uppercase tracking-widest rounded-xl transition-all border border-red-200"
+              >
+                Remove Winner
+              </button>
+            )}
             <button
-              disabled={selectedIds.length !== data.winnersPerMonth || mutation.isPending}
+              disabled={selectedIds.length > data.winnersPerMonth || mutation.isPending}
               onClick={onSubmit}
               className="px-10 py-2.5 bg-[#1A1209] hover:bg-[#B8860B] disabled:bg-gray-300 text-white text-xs font-bold uppercase tracking-[0.2em] rounded-xl flex items-center gap-2 shadow-lg hover:shadow-[#B8860B]/20 transition-all"
             >
-              {mutation.isPending ? <Loader2 size={14} className="animate-spin" /> : 'Confirm Winner'}
+              {mutation.isPending ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : selectedIds.length === 0 ? (
+                'Clear Winner'
+              ) : (
+                'Confirm Winner'
+              )}
             </button>
           </div>
         </div>
