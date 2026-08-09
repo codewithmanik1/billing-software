@@ -1,6 +1,6 @@
 import React from 'react';
 import { Modal } from '../../../components/ui/Modal';
-import { Award, CheckCircle2, Clock, CreditCard, Wallet, Calendar, User, Phone, X, ShieldAlert, Sparkles } from 'lucide-react';
+import { Award, CheckCircle2, Clock, CreditCard, Sparkles, User, Phone } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface BishiMemberDetailsModalProps {
@@ -79,7 +79,7 @@ export const BishiMemberDetailsModal: React.FC<BishiMemberDetailsModalProps> = (
   const isWinner = member.status === 'WON' || !!member.wonMonthNumber;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="" maxWidth="max-w-4xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="">
       <div className="space-y-6">
         {/* Header Card */}
         <div className="bg-gradient-to-br from-[#1A1209] to-[#2D2115] text-[#F5F5F0] rounded-2xl p-6 shadow-xl relative overflow-hidden border border-[#B8860B]/30">
